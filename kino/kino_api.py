@@ -5,13 +5,14 @@ from dotenv import load_dotenv
 import os
 from datetime import datetime
 from database import execute_query_fetch,get_price_list
-from kino.json_mapping_handler import json_mapping_handler
 import pprint
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 import difflib
 from log_handler.logs import KinoLogger
+import re
+from kino.kino_api_test import mock_data
 
 logger = KinoLogger("kino_api_logs")
 
@@ -42,6 +43,7 @@ def get_kino_config():
 
 
 def login():
+    # if using env
     # url = os.getenv("KINO_GET_LOGIN_URL")
     # client_id = os.getenv("KINO_CLIENT_ID")
     # client_secret = os.getenv("KINO_CLIENT_SECRET")
@@ -70,34 +72,27 @@ def login():
         print("Response text:", getattr(e.response, "text", ""))
         return None
 
+def normalize_customer_name(customer_name_formated:str):
+    text = customer_name_formated.lower()
+    # remove non-alphanumeric (hanya huruf + angka)
+    text = re.sub(r'[^a-z0-9]', '', customer_name_formated)
+    return text
 
-def get_customer_from_json_mapping(customer_name_formated: str,region_id:str):
+def customer_code_normalize_name(customer_name_formated: str,region_id:str):
+    query = """
+    SELECT cm_region,cm_entity, cm_branch, cm_cust_code1, cm_cust_code2, cm_cust_name 
+    FROM `tabCustomer Mapping Detail`
+    WHERE parent = 'Kino API Settings'
     """
-    Mencari customer code berdasarkan nama customer.
-    - Cocok EXACT match
-    - Kalau tidak ketemu, cari yang PALING MIRIP (fuzzy)
-    """
-    # for test json only
-    region_id = int(region_id)
-
-    customers_mapping = json_mapping_handler(type="customer")
-
-    # Cek exact match
+    customers_mapping = execute_query_fetch(query=query)
+    customer_name_input = normalize_customer_name(customer_name_formated=customer_name_formated)
     for customer in customers_mapping:
-        if customer_name_formated.strip().upper() == customer.get("CM_CUST_NAME", "").strip().upper() and customer.get("CM_REGION") == region_id:
-            return customer.get("CM_CUST_CODE1"), customer.get("CM_CUST_CODE2"), customer.get("CM_ENTITY"), customer.get("CM_BRANCH")
-
-    # Kalau tidak ada exact match → fuzzy matching
-    names = [c.get("CM_CUST_NAME") for c in customers_mapping]
-    closest = difflib.get_close_matches(customer_name_formated, names, n=1, cutoff=0.5)
-
-    if closest:
-        # Cari record customer yang nama nya sama dengan hasil fuzzy terdekat
-        for customer in customers_mapping:
-            if customer.get("CM_CUST_NAME") == closest[0] and customer.get("CM_REGION") == region_id:
-                return customer.get("CM_CUST_CODE1"), customer.get("CM_CUST_CODE2"),customer.get("CM_ENTITY"),customer.get("CM_BRANCH")
-
-    return None, None, None, None
+        customer_name_mapping = normalize_customer_name(customer_name_formated=customer.get('cm_cust_name'))
+        if customer_name_input == customer_name_mapping and customer.get("cm_region") == region_id:
+            return customer.get("cm_cust_code1"), customer.get("cm_cust_code2"), customer.get("cm_entity"), customer.get("cm_branch")
+    
+    raise Exception (f"Customer Not Found for {customer_name_formated} in customer Mapping")
+    
 
 def get_customer_code(customer_name_formated: str,region_id:str):
     query = """
@@ -123,6 +118,11 @@ def get_customer_code(customer_name_formated: str,region_id:str):
 
     return None, None, None, None
 
+def remove_kn(item_code: str):
+    if item_code.startswith("KN"):
+        return item_code[2:]
+    return item_code
+
 def get_salesman_code():
     query = """
     SELECT gms_region,gms_entity,gms_branch,gms_salesman_id,gms_salesman_name 
@@ -132,10 +132,7 @@ def get_salesman_code():
     salesman_mapping = execute_query_fetch(query=query)
     if salesman_mapping:
         return salesman_mapping[0]
-
-def get_salesman_from_json_mapping():
-    salesman_mapping = json_mapping_handler(type='salesman')
-    return salesman_mapping[0]['GMS_SALESMAN_ID']
+    raise Exception ("Salesman Not Found in Salesman mapping")
 
 def get_price_list_item(item:str,price_list:str):
     result = get_price_list(item_code=item,price_list=price_list)
@@ -143,143 +140,145 @@ def get_price_list_item(item:str,price_list:str):
 
 def grouped_data_by_order_id(query_result:list):
     grouped_data ={}
-    for row in query_result:
-        order_id = row.get('name')
-        if not order_id:
-            continue
+    try:
+        for row in query_result:
+            order_id = row.get('name')
+            if not order_id:
+                continue
 
-        if order_id not in grouped_data:
-            grouped_data[order_id] = []
-        
-            # get Region Code
-            sub_brand = row.get("sub_brand")
-            if sub_brand:
-                if sub_brand.lower() == "maxlife":
-                    region_code = "1002"
-                    branch_code = "1002"
+            if order_id not in grouped_data:
+                grouped_data[order_id] = []
+            
+                # get Region Code
+                sub_brand = row.get("sub_brand")
+                if sub_brand:
+                    if sub_brand.lower() == "maxlife":
+                        region_code = "1002"
+                    else:
+                        region_code = "1000"
                 else:
                     region_code = "1000"
-                    branch_code = "1000"
-            else:
-                region_code = "1000"
-                branch_code = "1000"
-            
-            # Formated Customer Name
-            formated_customer_name = f"{row.get('store').upper() if row.get('store',None) else ''} ({row.get('channel').upper() if row.get('channel',None) else ''})"
-            print(formated_customer_name)
-            print("customer_name\n")
-            
-            # cust_code1 = get_customer_code(formated_customer_name,region_code)[0]
-            # cust_code2 = get_customer_code(formated_customer_name,region_code)[1]
-            # salesman_code = get_salesman_code()['gms_salesman_id']
-            print(get_customer_from_json_mapping(customer_name_formated=formated_customer_name,region_id=region_code))
-            cust_code1 = get_customer_from_json_mapping(customer_name_formated=formated_customer_name,region_id=region_code)[0]
-            cust_code2 = get_customer_from_json_mapping(customer_name_formated=formated_customer_name,region_id=region_code)[1]
-            entity_code = get_customer_from_json_mapping(customer_name_formated=formated_customer_name,region_id=region_code)[2]
-            salesman_code = get_salesman_from_json_mapping()
+                
+                # Formated Customer Name
+                formated_customer_name = f"{row.get('store').upper() if row.get('store',None) else ''} ({row.get('channel').upper() if row.get('channel',None) else ''})"
 
-            transaction_date = row.get("transaction_date").isoformat() if row.get("transaction_date",None) else None
+                cust_code1 = get_customer_code(formated_customer_name,region_code)[0]
+                cust_code2 = get_customer_code(formated_customer_name,region_code)[1]
+                entity_code = get_customer_code(formated_customer_name,region_code)[2]
+                branch_code = get_customer_code(formated_customer_name,region_code)[3]
+                salesman_code = get_salesman_code()['gms_salesman_id']
 
-            grouped_data[order_id].append({
-                'REGION_CODE':region_code,
-                'BRANCH_CODE':branch_code,
-                'ENTITY_CODE':entity_code,
-                'CUST_CODE1':cust_code1,
-                'CUST_CODE2':cust_code2,
-                'SALESMAN_CODE':salesman_code,
-                'INV_TYPE':"INV02",
-                'ORDER_REF':row.get("name",None),
-                'ORDER_DATE':transaction_date,
-                'SFA_TGLORDER':transaction_date,
-                'SFA_ORDERNO':row.get("name",None),
-                'SFA_SLSNO':salesman_code
-            })
-    return grouped_data
+                transaction_date = row.get("transaction_date").isoformat() if row.get("transaction_date",None) else None
+
+                grouped_data[order_id].append({
+                    'REGION_CODE':region_code,
+                    'BRANCH_CODE':branch_code,
+                    'ENTITY_CODE':str(entity_code),
+                    'CUST_CODE1':cust_code1,
+                    'CUST_CODE2':cust_code2,
+                    'SALESMAN_CODE':salesman_code,
+                    'INV_TYPE':"INV02",
+                    'ORDER_REF':row.get("name",None),
+                    'ORDER_DATE':transaction_date,
+                    'SFA_TGLORDER':transaction_date,
+                    'SFA_ORDERNO':row.get("name",None),
+                    'SFA_SLSNO':salesman_code
+                })
+        return grouped_data
+    except Exception as error:
+        raise Exception(traceback.format_exc())
         
 
 
 def group_details_by_order_id(query_result: list):
     grouped_detail = {}
+    try:
 
-    for row in query_result:
-        order_id = row.get('name')
-        if not order_id:
-            continue
+        for row in query_result:
+            order_id = row.get('name')
+            if not order_id:
+                continue
 
-        if order_id not in grouped_detail:
-            grouped_detail[order_id] = []
+            if order_id not in grouped_detail:
+                grouped_detail[order_id] = []
 
-        price_list_rate = row.get('price_list_rate_dbp',None)
+            price_list_rate = row.get('price_list_rate_dbp',None)
 
-        grouped_detail[order_id].append({
-            'PCODE': row.get('item_code'),
-            'PRICE': price_list_rate,
-            'LINETYPE': 'N',
-            'QTY': row.get('quantity'),
-            'GROSS': row.get('total_amount'),
+            grouped_detail[order_id].append({
+                'PCODE': remove_kn(row.get('item_code')),
+                'PRICE': price_list_rate,
+                'LINETYPE': 'N',
+                'QTY': row.get('quantity'),
+                'GROSS': row.get('total_amount'),
 
-            'DISC_ID1': "",
-            'DISC_PRINCIPAL_PCT1': 0.0,
-            'DISC_PRINCIPAL_VAL1': 0.0,
-            'DISC_DIST_PCT1': "1",
-            'DISC_DIST_VAL1': "",
+                'DISC_ID1': "",
+                'DISC_PRINCIPAL_PCT1': 0.0,
+                'DISC_PRINCIPAL_VAL1': 0.0,
+                'DISC_DIST_PCT1': "1",
+                'DISC_DIST_VAL1': "",
 
-            'DISC_ID2': "",
-            'DISC_PRINCIPAL_PCT2': 0.0,
-            'DISC_PRINCIPAL_VAL2': 0.0,
-            'DISC_DIST_PCT2': 0.0,
-            'DISC_DIST_VAL2': 0.0,
+                'DISC_ID2': "",
+                'DISC_PRINCIPAL_PCT2': 0.0,
+                'DISC_PRINCIPAL_VAL2': 0.0,
+                'DISC_DIST_PCT2': 0.0,
+                'DISC_DIST_VAL2': 0.0,
 
-            'DISC_ID3': "",
-            'DISC_PRINCIPAL_PCT3': 0.0,
-            'DISC_PRINCIPAL_VAL3': 0.0,
-            'DISC_DIST_PCT3': 0.0,
-            'DISC_DIST_VAL3': 0.0,
+                'DISC_ID3': "",
+                'DISC_PRINCIPAL_PCT3': 0.0,
+                'DISC_PRINCIPAL_VAL3': 0.0,
+                'DISC_DIST_PCT3': 0.0,
+                'DISC_DIST_VAL3': 0.0,
 
-            'DISC_ID4': "",
-            'DISC_PRINCIPAL_PCT4': 0.0,
-            'DISC_PRINCIPAL_VAL4': 0.0,
-            'DISC_DIST_PCT4': 0.0,
-            'DISC_DIST_VAL4': 0.0,
+                'DISC_ID4': "",
+                'DISC_PRINCIPAL_PCT4': 0.0,
+                'DISC_PRINCIPAL_VAL4': 0.0,
+                'DISC_DIST_PCT4': 0.0,
+                'DISC_DIST_VAL4': 0.0,
 
-            'DISC_ID5': "",
-            'DISC_PRINCIPAL_PCT5': 0.0,
-            'DISC_PRINCIPAL_VAL5': 0.0,
-            'DISC_DIST_PCT5': 0.0,
-            'DISC_DIST_VAL5': 0.0,
+                'DISC_ID5': "",
+                'DISC_PRINCIPAL_PCT5': 0.0,
+                'DISC_PRINCIPAL_VAL5': 0.0,
+                'DISC_DIST_PCT5': 0.0,
+                'DISC_DIST_VAL5': 0.0,
 
-            'DISC_ID6': "",
-            'DISC_PRINCIPAL_PCT6': 0.0,
-            'DISC_PRINCIPAL_VAL6': 0.0,
-            'DISC_DIST_PCT6': 0.0,
-            'DISC_DIST_VAL6': 0.0,
+                'DISC_ID6': "",
+                'DISC_PRINCIPAL_PCT6': 0.0,
+                'DISC_PRINCIPAL_VAL6': 0.0,
+                'DISC_DIST_PCT6': 0.0,
+                'DISC_DIST_VAL6': 0.0,
 
-            'TAX_AMT': row.get('tax_amount', 0.0),
-            'NET': row.get('total_amount', 0.0),
-            'DISC_TOTAL': 0.0
-        })
-    return grouped_detail
+                'TAX_AMT': row.get('tax_amount', 0.0),
+                'NET': row.get('total_amount', 0.0),
+                'DISC_TOTAL': 0.0
+            })
+        return grouped_detail
+    except Exception as error:
+        raise Exception (traceback.format_exc())
 
 def build_payload(result: list):
-    grouped_data = grouped_data_by_order_id(query_result=result)
-    grouped_detail = group_details_by_order_id(query_result=result)
+    try:
+        grouped_data = grouped_data_by_order_id(query_result=result)
+        grouped_detail = group_details_by_order_id(query_result=result)
 
-    payloads = []
+        payloads = []
 
-    for key in grouped_data:
-        # buat header baru untuk setiap order
-        header = {
-            "INTERFACEID": "T007",
-            "CLIENTID": "12",
-            "DATA": []
-        }
-        order_header = grouped_data[key][0]
-        details = grouped_detail.get(key, [])
-        order_header["DETAIL"] = details
-        header["DATA"].append(order_header)
-        payloads.append(header)
+        for key in grouped_data:
+            # buat header baru untuk setiap order
+            header = {
+                "INTERFACEID": "T007",
+                "CLIENTID": "12",
+                "DATA": []
+            }
+            order_header = grouped_data[key][0]
+            details = grouped_detail.get(key, [])
+            order_header["DETAIL"] = details
+            header["DATA"].append(order_header)
+            payloads.append(header)
 
-    return payloads
+        return payloads
+    except Exception as error:
+        raise Exception (traceback.format_exc())
+    
 
 
 def create_post_invoice_payload(order_ref:str = None,start_date:str = None,end_date:str = None):
@@ -288,232 +287,111 @@ def create_post_invoice_payload(order_ref:str = None,start_date:str = None,end_d
         conditions.append(f"AND calc.name = '{order_ref}'")
 
     condition_sql = " ".join(conditions) if conditions else ""
-    # query = f"""
-    #     SELECT
-    #         calc.name,
-    #         calc.po_no,
-    #         calc.transaction_date,
-    #         calc.grand_total as grand_total_with_vat,
-    #         calc.master_bundle_item,
-    #         calc.item_code,
-    #         calc.sub_brand,
-    #         calc.quantity,
-    #         calc.harga_jual,
-    #         calc.total_amount,
-    #         CAST(calc.total_amount * 0.11 AS DECIMAL(20,4)) as tax_amount,
-    #         CAST(calc.total_amount * 1.11 AS DECIMAL(20,4)) as amount,
-    #         calc.is_bundle_item,
-    #         calc.store,
-    #         calc.channel,
-    #         calc.price_list_rate_dbp
-    #     FROM (
-    #             SELECT
-    #                 so.name,
-    #                 so.po_no,
-    #                 so.transaction_date,
-    #                 so.grand_total,
-    #                 COALESCE(pi.parent_item, "") as master_bundle_item,
-    #                 COALESCE(pi.item_code, soi.item_code) as item_code,
+    query = f"""
+        SELECT
+            calc.name,
+            calc.po_no,
+            calc.transaction_date,
+            calc.grand_total as grand_total_with_vat,
+            calc.master_bundle_item,
+            calc.item_code,
+            calc.sub_brand,
+            calc.quantity,
+            calc.harga_jual,
+            calc.total_amount,
+            CAST(calc.total_amount * 0.11 AS DECIMAL(20,4)) as tax_amount,
+            CAST(calc.total_amount * 1.11 AS DECIMAL(20,4)) as amount,
+            calc.is_bundle_item,
+            calc.store,
+            calc.channel,
+            calc.price_list_rate_dbp
+        FROM (
+                SELECT
+                    so.name,
+                    so.po_no,
+                    so.transaction_date,
+                    so.grand_total,
+                    COALESCE(pi.parent_item, "") as master_bundle_item,
+                    COALESCE(pi.item_code, soi.item_code) as item_code,
 
-    #                 COALESCE(pi.qty, soi.qty) - COALESCE(soi.returned_qty, 0) as quantity,
+                    COALESCE(pi.qty, soi.qty) - COALESCE(soi.returned_qty, 0) as quantity,
 
-    #                 CAST(COALESCE(soi.rate * pi.qty / pi_totals.total_qty, soi.rate) AS DECIMAL(20,4)) as harga_jual,
+                    CAST(COALESCE(soi.rate * pi.qty / pi_totals.total_qty, soi.rate) AS DECIMAL(20,4)) as harga_jual,
 
-    #                 CAST(
-    #                         COALESCE((soi.rate / pi_totals.total_qty) * pi.qty, soi.rate * soi.qty)
-    #                         AS DECIMAL(20,4)
-    #                     )
-    #                     * (
-    #                         (COALESCE(pi.qty, soi.qty) - COALESCE(soi.returned_qty, 0))
-    #                         / COALESCE(pi.qty, soi.qty)
-    #                     ) as total_amount,
-    #                 (
-    #                 SELECT ip.price_list_rate
-    #                 FROM `tabItem Price` ip
-    #                 WHERE ip.item_code = COALESCE(pi.item_code, soi.item_code)
-    #                 AND ip.price_list = 'DBP'
-    #                 AND ip.valid_from <= so.transaction_date
-    #                 ORDER BY ip.valid_from DESC
-    #                 LIMIT 1
-    #                 ) AS price_list_rate_dbp,
+                    CAST(
+                            COALESCE((soi.rate / pi_totals.total_qty) * pi.qty, soi.rate * soi.qty)
+                            AS DECIMAL(20,4)
+                        )
+                        * (
+                            (COALESCE(pi.qty, soi.qty) - COALESCE(soi.returned_qty, 0))
+                            / COALESCE(pi.qty, soi.qty)
+                        ) as total_amount,
+                    (
+                    SELECT ip.price_list_rate
+                    FROM `tabItem Price` ip
+                    WHERE ip.item_code = COALESCE(pi.item_code, soi.item_code)
+                    AND ip.price_list = 'DBP'
+                    AND ip.valid_from <= so.transaction_date
+                    ORDER BY ip.valid_from DESC
+                    LIMIT 1
+                    ) AS price_list_rate_dbp,
 
-    #                 CASE WHEN pi.item_code IS NOT NULL THEN 1 ELSE 0 END as is_bundle_item,
+                    CASE WHEN pi.item_code IS NOT NULL THEN 1 ELSE 0 END as is_bundle_item,
 
-    #                 JSON_UNQUOTE(JSON_EXTRACT(api_log.response, '$.data.price[0].store')) AS store,
-    #                 JSON_UNQUOTE(JSON_EXTRACT(api_log.response, '$.data.price[0].channel')) AS channel,
+                    JSON_UNQUOTE(JSON_EXTRACT(api_log.response, '$.data.price[0].store')) AS store,
+                    JSON_UNQUOTE(JSON_EXTRACT(api_log.response, '$.data.price[0].channel')) AS channel,
 
-    #                 soi.idx,
-    #                 it.sub_brand,
-    #                 COALESCE(pi.idx, 0) as pi_idx
+                    soi.idx,
+                    it.sub_brand,
+                    COALESCE(pi.idx, 0) as pi_idx
 
-    #             FROM aladdin.`tabSales Order Item` soi
-    #                 INNER JOIN aladdin.`tabSales Order` so
-    #                     ON soi.parent = so.name
+                FROM aladdin.`tabSales Order Item` soi
+                    INNER JOIN aladdin.`tabSales Order` so
+                        ON soi.parent = so.name
 
-    #                 LEFT JOIN aladdin.`tabPacked Item` pi
-    #                     ON pi.parent = so.name AND pi.parent_item = soi.item_code
+                    LEFT JOIN aladdin.`tabPacked Item` pi
+                        ON pi.parent = so.name AND pi.parent_item = soi.item_code
 
-    #                 LEFT JOIN aladdin.`tabItem` it
-    #                     ON pi.item_code = it.item_code
+                    LEFT JOIN aladdin.`tabItem` it
+                        ON pi.item_code = it.item_code
 
-    #                 LEFT JOIN (
-    #                     SELECT parent, parent_item, SUM(qty) as total_qty
-    #                     FROM aladdin.`tabPacked Item`
-    #                     GROUP BY parent, parent_item
-    #                 ) pi_totals
-    #                     ON pi_totals.parent = so.name
-    #                     AND pi_totals.parent_item = soi.item_code
+                    LEFT JOIN (
+                        SELECT parent, parent_item, SUM(qty) as total_qty
+                        FROM aladdin.`tabPacked Item`
+                        GROUP BY parent, parent_item
+                    ) pi_totals
+                        ON pi_totals.parent = so.name
+                        AND pi_totals.parent_item = soi.item_code
 
-    #                 LEFT JOIN logs.erpnext_arbi_titipaja_api_log api_log
-    #                     ON api_log.po_no = so.po_no
-    #                     AND api_log.title = 'Price Detail'
-    #                     AND api_log.created_at = (
-    #                         SELECT MAX(created_at)
-    #                         FROM logs.erpnext_arbi_titipaja_api_log l2
-    #                         WHERE l2.po_no = so.po_no
-    #                         AND l2.title = 'Price Detail'
-    #                     )
+                    LEFT JOIN logs.erpnext_arbi_titipaja_api_log api_log
+                        ON api_log.po_no = so.po_no
+                        AND api_log.title = 'Price Detail'
+                        AND api_log.created_at = (
+                            SELECT MAX(created_at)
+                            FROM logs.erpnext_arbi_titipaja_api_log l2
+                            WHERE l2.po_no = so.po_no
+                            AND l2.title = 'Price Detail'
+                        )
 
-    #             WHERE soi.brand = 'Kino'
-    #             AND so.docstatus = 1
-    #             AND so.transaction_date >= %s
-    #             AND so.transaction_date <= %s
-    #         ) calc
+                WHERE soi.brand = 'Kino'
+                AND so.docstatus = 1
+                AND so.transaction_date >= %s
+                AND so.transaction_date <= %s
+            ) calc
 
-    #     WHERE calc.quantity != 0
-    #     {condition_sql}
-    #     ORDER BY calc.po_no, calc.name, calc.idx, calc.pi_idx LIMIT 2;
-    # """
-    # result = execute_query_fetch(query=query,params=(start_date,end_date))
-    # payloads = build_payload(result=result)
-    payloads = [
-        {
-            "INTERFACEID": "T007",
-            "CLIENTID": "12",
-            "DATA": [
-            {
-                "REGION_CODE": "1000",
-                "BRANCH_CODE": "1000",
-                "ENTITY_CODE": 22,
-                "CUST_CODE1": "3430OLKINO005",
-                "CUST_CODE2": "OLKINO005",
-                "SALESMAN_CODE": "3430LO5101",
-                "INV_TYPE": "INV02",
-                "ORDER_REF": "SO-ARB-25-00028260",
-                "ORDER_DATE": "2025-11-01",
-                "SFA_TGLORDER": "2025-11-01",
-                "SFA_ORDERNO": "SO-ARB-25-00028260",
-                "SFA_SLSNO": "3430LO5101",
-                "DETAIL": [
-                {
-                    "PCODE": "KN110062",
-                    "PRICE": 26216.216216,
-                    "LINETYPE": "N",
-                    "QTY": 2.0,
-                    "GROSS": 61621.62,
-                    "DISC_ID1": "",
-                    "DISC_PRINCIPAL_PCT1": 0.0,
-                    "DISC_PRINCIPAL_VAL1": 0.0,
-                    "DISC_DIST_PCT1": "1",
-                    "DISC_DIST_VAL1": "",
-                    "DISC_ID2": "",
-                    "DISC_PRINCIPAL_PCT2": 0.0,
-                    "DISC_PRINCIPAL_VAL2": 0.0,
-                    "DISC_DIST_PCT2": 0.0,
-                    "DISC_DIST_VAL2": 0.0,
-                    "DISC_ID3": "",
-                    "DISC_PRINCIPAL_PCT3": 0.0,
-                    "DISC_PRINCIPAL_VAL3": 0.0,
-                    "DISC_DIST_PCT3": 0.0,
-                    "DISC_DIST_VAL3": 0.0,
-                    "DISC_ID4": "",
-                    "DISC_PRINCIPAL_PCT4": 0.0,
-                    "DISC_PRINCIPAL_VAL4": 0.0,
-                    "DISC_DIST_PCT4": 0.0,
-                    "DISC_DIST_VAL4": 0.0,
-                    "DISC_ID5": "",
-                    "DISC_PRINCIPAL_PCT5": 0.0,
-                    "DISC_PRINCIPAL_VAL5": 0.0,
-                    "DISC_DIST_PCT5": 0.0,
-                    "DISC_DIST_VAL5": 0.0,
-                    "DISC_ID6": "",
-                    "DISC_PRINCIPAL_PCT6": 0.0,
-                    "DISC_PRINCIPAL_VAL6": 0.0,
-                    "DISC_DIST_PCT6": 0.0,
-                    "DISC_DIST_VAL6": 0.0,
-                    "TAX_AMT": 6778.3782,
-                    "NET": 61621.62,
-                    "DISC_TOTAL": 0.0
-                }
-                ]
-            }
-            ]
-        },
-        {
-            "INTERFACEID": "T007",
-            "CLIENTID": "12",
-            "DATA": [
-            {
-                "REGION_CODE": "1000",
-                "BRANCH_CODE": "1000",
-                "ENTITY_CODE": 22,
-                "CUST_CODE1": "3430OLKINO006",
-                "CUST_CODE2": "OLKINO006",
-                "SALESMAN_CODE": "3430LO5101",
-                "INV_TYPE": "INV02",
-                "ORDER_REF": "SO-ARB-25-00028488",
-                "ORDER_DATE": "2025-11-01",
-                "SFA_TGLORDER": "2025-11-01",
-                "SFA_ORDERNO": "SO-ARB-25-00028488",
-                "SFA_SLSNO": "3430LO5101",
-                "DETAIL": [
-                {
-                    "PCODE": "KN104004",
-                    "PRICE": 22972.972973,
-                    "LINETYPE": "N",
-                    "QTY": 1.0,
-                    "GROSS": 29711.71,
-                    "DISC_ID1": "",
-                    "DISC_PRINCIPAL_PCT1": 0.0,
-                    "DISC_PRINCIPAL_VAL1": 0.0,
-                    "DISC_DIST_PCT1": "1",
-                    "DISC_DIST_VAL1": "",
-                    "DISC_ID2": "",
-                    "DISC_PRINCIPAL_PCT2": 0.0,
-                    "DISC_PRINCIPAL_VAL2": 0.0,
-                    "DISC_DIST_PCT2": 0.0,
-                    "DISC_DIST_VAL2": 0.0,
-                    "DISC_ID3": "",
-                    "DISC_PRINCIPAL_PCT3": 0.0,
-                    "DISC_PRINCIPAL_VAL3": 0.0,
-                    "DISC_DIST_PCT3": 0.0,
-                    "DISC_DIST_VAL3": 0.0,
-                    "DISC_ID4": "",
-                    "DISC_PRINCIPAL_PCT4": 0.0,
-                    "DISC_PRINCIPAL_VAL4": 0.0,
-                    "DISC_DIST_PCT4": 0.0,
-                    "DISC_DIST_VAL4": 0.0,
-                    "DISC_ID5": "",
-                    "DISC_PRINCIPAL_PCT5": 0.0,
-                    "DISC_PRINCIPAL_VAL5": 0.0,
-                    "DISC_DIST_PCT5": 0.0,
-                    "DISC_DIST_VAL5": 0.0,
-                    "DISC_ID6": "",
-                    "DISC_PRINCIPAL_PCT6": 0.0,
-                    "DISC_PRINCIPAL_VAL6": 0.0,
-                    "DISC_DIST_PCT6": 0.0,
-                    "DISC_DIST_VAL6": 0.0,
-                    "TAX_AMT": 3268.2881,
-                    "NET": 29711.71,
-                    "DISC_TOTAL": 0.0
-                }
-                ]
-            }
-            ]
-        }
-        ]
+        WHERE calc.quantity != 0
+        {condition_sql}
+        ORDER BY calc.po_no, calc.name, calc.idx, calc.pi_idx LIMIT 2;
+    """
+    try:
+        result = execute_query_fetch(query=query,params=(start_date,end_date))
+        payloads = build_payload(result=result)
+        # for test
+        # payloads = mock_data()
 
-    return payloads
+        return payloads
+    except Exception as error:
+        raise Exception(traceback.format_exc())
 
 def send_single_invoice(url: str, headers: dict, payload: json):
     try:
@@ -522,9 +400,11 @@ def send_single_invoice(url: str, headers: dict, payload: json):
         log_data = {
             "url": url,
             "title": "SEND_SINGLE_INVOICE",
+            "order_ref":payload['DATA'][0]['ORDER_REF'],
             "method": "POST",
             "status_code": response.status_code if response else None,
             "request": payload,
+            "kino_status":response.text.get("STATUSDESC",None),
             "response": response.text if response else None
         }
 
@@ -538,14 +418,16 @@ def send_single_invoice(url: str, headers: dict, payload: json):
         return {"status": "failed", "payload": payload, "response": response.text}
 
     except Exception as e:
-        err_text = traceback.format_exc()
+        err_text = e
         logger.log({
             "url": url,
             "title": "SEND_SINGLE_INVOICE_ERROR",
+            "order_ref":payload['DATA'][0]['ORDER_REF'],
             "method": "POST",
-            "status_code": None,
+            "status_code": 500,
+            "kino_status":response.text.get("STATUSDESC",None),
             "request": payload,
-            "response": err_text
+            "response": e
         })
         print("Error sending payload:", err_text)
         return {"status": "error", "payload": payload, "response": str(e)}
@@ -553,6 +435,7 @@ def send_single_invoice(url: str, headers: dict, payload: json):
 
 def ids_post_invoice(data_dict:dict):
     token = login()['access_token']
+    # if using env
     # url = os.getenv("KINO_IDS_POST_INVOICE_URL")
     url = get_kino_config().get('kino_host')+'api/ids/extclient/masterpayload'
     headers = {
@@ -566,7 +449,6 @@ def ids_post_invoice(data_dict:dict):
         order_ref = data_dict.get('ORDER_REF',None)
         start_date = data_dict.get('START_DATE',None)
         end_date = data_dict.get('END_DATE',None)
-
     try:
         payloads = create_post_invoice_payload(order_ref=order_ref,start_date=start_date,end_date=end_date)
         results = []
@@ -579,15 +461,28 @@ def ids_post_invoice(data_dict:dict):
 
             for future in as_completed(future_to_payload):
                 results.append(future.result())
-        print(results)
-        print('result\n')
-
+        # debug
+        # print(results)
+        # print('result\n')
         return results
 
     except Exception as error:
         print(traceback.format_exc(),error)
+        err_text = traceback.format_exc()
+        logger.log({
+            "url": url,
+            "title": "SEND_SINGLE_INVOICE_ERROR",
+            "order_ref":None,
+            "method": "POST",
+            "status_code": 500,
+            "kino_status":None,
+            "request": None,
+            "response": err_text
+        })
+        
         return None
 
+# test only
 if __name__ == '__main__':
     try:
         print(create_post_invoice_payload(start_date='2025-11-01',end_date='2025-11-31'))
