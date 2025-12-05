@@ -471,7 +471,7 @@ def ids_post_invoice(data_dict:dict):
         err_text = traceback.format_exc()
         logger.log({
             "url": url,
-            "title": "SEND_SINGLE_INVOICE_ERROR",
+            "title": "INVOICE_ERROR",
             "order_ref":None,
             "method": "POST",
             "status_code": 500,
