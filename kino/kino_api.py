@@ -91,9 +91,13 @@ def get_customer_code(store:str,channel:str,region_id:str):
         customers_mapping = execute_query_fetch(query=query)
         lower_store = store.lower()
         lower_channel = channel.lower()
+        found = False
         for customer in customers_mapping:
             if customer.get('store') == lower_store and customer.get('channel') == lower_channel and region_id == customer.get('cm_region'):
+                found = True
                 return customer.get('cm_cust_code1'),customer.get('cm_cust_code2'),customer.get('cm_entity'),customer.get('cm_branch')
+        if not found:
+            raise Exception (f"Customer Code with store {store} and channel {channel} not found")
     except Exception as e:
         raise Exception (f"Customer Code with store {store} and channel {channel} not found")
 
