@@ -71,52 +71,31 @@ def login():
         print("Login API Error:", str(e))
         print("Response text:", getattr(e.response, "text", ""))
         return None
+    
 
-def normalize_customer_name(customer_name_formated:str):
-    text = customer_name_formated.lower()
-    # remove non-alphanumeric (hanya huruf + angka)
-    text = re.sub(r'[^a-z0-9]', '', customer_name_formated)
-    return text
-
-def customer_code_normalize_name(customer_name_formated: str,region_id:str):
+def get_customer_code(store:str,channel:str,region_id:str):
     query = """
-    SELECT cm_region,cm_entity, cm_branch, cm_cust_code1, cm_cust_code2, cm_cust_name 
+    SELECT
+        store,
+        channel,
+        cm_region,
+        cm_entity,
+        cm_branch,
+        cm_cust_code1,
+        cm_cust_code2,
+        cm_cust_name 
     FROM `tabCustomer Mapping Detail`
     WHERE parent = 'Kino API Settings'
     """
-    customers_mapping = execute_query_fetch(query=query)
-    customer_name_input = normalize_customer_name(customer_name_formated=customer_name_formated)
-    for customer in customers_mapping:
-        customer_name_mapping = normalize_customer_name(customer_name_formated=customer.get('cm_cust_name'))
-        if customer_name_input == customer_name_mapping and customer.get("cm_region") == region_id:
-            return customer.get("cm_cust_code1"), customer.get("cm_cust_code2"), customer.get("cm_entity"), customer.get("cm_branch")
-    
-    raise Exception (f"Customer Not Found for {customer_name_formated} in customer Mapping")
-    
-
-def get_customer_code(customer_name_formated: str,region_id:str):
-    query = """
-    SELECT cm_region,cm_entity, cm_branch, cm_cust_code1, cm_cust_code2, cm_cust_name 
-    FROM `tabCustomer Mapping Detail`
-    WHERE parent = 'Kino API Settings'
-    """
-    customers_mapping = execute_query_fetch(query=query)
-    # Cek exact match
-    for customer in customers_mapping:
-        if customer_name_formated.strip().upper() == customer.get("cm_cust_name", "").strip().upper() and customer.get("cm_region") == region_id:
-            return customer.get("cm_cust_code1"), customer.get("cm_cust_code2"), customer.get("cm_entity"), customer.get("cm_branch")
-
-    # Kalau tidak ada exact match → fuzzy matching
-    names = [c.get("cm_cust_name") for c in customers_mapping]
-    closest = difflib.get_close_matches(customer_name_formated, names, n=1, cutoff=0.5)
-
-    if closest:
-        # Cari record customer yang nama nya sama dengan hasil fuzzy terdekat
+    try:
+        customers_mapping = execute_query_fetch(query=query)
+        lower_store = store.lower()
+        lower_channel = channel.lower()
         for customer in customers_mapping:
-            if customer.get("cm_cust_name") == closest[0] and customer.get("cm_region") == region_id:
-                return customer.get("cm_cust_code1"), customer.get("cm_cust_code2"),customer.get("cm_entity"),customer.get("cm_branch")
-
-    return None, None, None, None
+            if customer.get('store') == lower_store and customer.get('channel') == lower_channel and region_id == customer.get('cm_region'):
+                return customer.get('cm_cust_code1'),customer.get('cm_cust_code2'),customer.get('cm_entity'),customer.get('cm_branch')
+    except Exception as e:
+        raise Exception (f"Customer Code with store {store} and channel {channel} not found")
 
 def remove_kn(item_code: str):
     if item_code.startswith("KN"):
@@ -160,12 +139,15 @@ def grouped_data_by_order_id(query_result:list):
                     region_code = "1000"
                 
                 # Formated Customer Name
-                formated_customer_name = f"{row.get('store').upper() if row.get('store',None) else ''} ({row.get('channel').upper() if row.get('channel',None) else ''})"
+                store = row.get('store',None)
+                channel = row.get('channel',None)
 
-                cust_code1 = get_customer_code(formated_customer_name,region_code)[0]
-                cust_code2 = get_customer_code(formated_customer_name,region_code)[1]
-                entity_code = get_customer_code(formated_customer_name,region_code)[2]
-                branch_code = get_customer_code(formated_customer_name,region_code)[3]
+                cust_code1 = get_customer_code(store=store,channel=channel,region_id=region_code)[0]
+                cust_code2 = get_customer_code(store=store,channel=channel,region_id=region_code)[1]
+                entity_code = get_customer_code(store=store,channel=channel,region_id=region_code)[2]
+                branch_code = get_customer_code(store=store,channel=channel,region_id=region_code)[3]
+                print(get_customer_code(store=store,channel=channel,region_id=region_code))
+                print("customer\n")
                 salesman_code = get_salesman_code()['gms_salesman_id']
 
                 transaction_date = row.get("transaction_date").isoformat() if row.get("transaction_date",None) else None
@@ -404,7 +386,7 @@ def send_single_invoice(url: str, headers: dict, payload: json):
             "method": "POST",
             "status_code": response.status_code if response else None,
             "request": payload,
-            "kino_status":response.text.get("STATUSDESC",None),
+            "kino_status":response.json().get("STATUSDESC", None),
             "response": response.text if response else None
         }
 
@@ -425,7 +407,7 @@ def send_single_invoice(url: str, headers: dict, payload: json):
             "order_ref":payload['DATA'][0]['ORDER_REF'],
             "method": "POST",
             "status_code": 500,
-            "kino_status":response.text.get("STATUSDESC",None),
+            "kino_status":response.json().get("STATUSDESC",None),
             "request": payload,
             "response": e
         })
