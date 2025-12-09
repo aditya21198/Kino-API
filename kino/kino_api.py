@@ -6,13 +6,10 @@ from dotenv import load_dotenv
 import os
 from datetime import datetime
 from database import execute_query_fetch,get_price_list
-import pprint
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
-import difflib
 from log_handler.logs import KinoLogger
-import re
 from kino.kino_api_test import mock_data
 from fastapi.encoders import jsonable_encoder
 
