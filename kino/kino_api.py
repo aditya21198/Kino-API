@@ -1,7 +1,7 @@
 import sys, os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import requests
-from models import ManualPostStock
+from models import KinoPostStock
 from dotenv import load_dotenv
 import os
 from datetime import datetime
@@ -471,8 +471,69 @@ def ids_post_invoice(data_dict:dict):
         
         return None
 
-def post_stock(data: ManualPostStock):
+def get_all_balance_kino_item(item_code: str = None, warehouse: str = None):
+    conditions = """
+        WHERE it.brand = 'KINO'
+        AND sle.docstatus = 1
+    """
+
+    params = []
+
+    if item_code:
+        conditions += " AND sle.item_code = %s"
+        params.append(item_code)
+
+    if warehouse:
+        conditions += " AND sle.warehouse = %s"
+        params.append(warehouse)
+
+    query = f"""
+        SELECT
+            sle.item_code,
+            sle.warehouse,
+            SUM(sle.actual_qty) AS balance
+        FROM `tabStock Ledger Entry` sle
+        INNER JOIN `tabItem` it ON it.name = sle.item_code
+        {conditions}
+        GROUP BY sle.item_code, sle.warehouse
+        HAVING balance <> 0
+    """
+    return execute_query_fetch(query=query, params=tuple(params))
+
+
+def create_stock_payload(item_code:str=None,warehouse:str=None):
+    whloc1 = "4001",
+    whloc2 = "01",
+    header = {
+    "INTERFACEID": "T006",
+    "CLIENTID": "12",
+    "DATA":[]
+    }
+    detail = []
+    kino_stock_balance = get_all_balance_kino_item(item_code=item_code,warehouse=warehouse)
+    for kino_stock in kino_stock_balance:
+        item_code = remove_kn(kino_stock.get('item_code'))
+        detail.append({
+            "PRDCODE": item_code,
+            "WHLOC1": whloc1,
+            "WHLOC2": whloc2,
+            "QTY": kino_stock.get('balance')
+        })
+    header['DATA'].append({
+        'DETAIL':detail
+    })
+    return header
+    
+
+def post_stock(data: KinoPostStock):
     try:
+        item_code = None
+        warehouse = None
+        if data:
+            item_code = data.get('item_code',None)
+            warehouse = data.get('warehouse',None)
+        payloads = create_stock_payload(item_code = item_code,warehouse=warehouse)
+
         token = login()['access_token']
         print(token)
         base_url = get_kino_config().get('kino_host')
@@ -484,8 +545,7 @@ def post_stock(data: ManualPostStock):
         }
 
         # Convert Pydantic model → JSON
-        payload = jsonable_encoder(data)
-
+        payload = json.dumps(payload)
         response = requests.post(
             url,
             json=payload,
@@ -548,7 +608,7 @@ def post_stock(data: ManualPostStock):
 # test only
 if __name__ == '__main__':
     try:
-        print(create_post_invoice_payload(start_date='2025-11-01',end_date='2025-11-31'))
+        print(create_stock_payload())
     except Exception as e:
         print(f"{datetime.now()} : Error in main function", flush=True)
         print(traceback.format_exc())

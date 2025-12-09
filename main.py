@@ -1,7 +1,7 @@
 import sys, os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi import FastAPI, BackgroundTasks
-from models import ManualPostInvoiceKino,ManualPostStock
+from models import ManualPostInvoiceKino,KinoPostStock
 from services import end_of_month_job
 from kino.kino_api import ids_post_invoice,post_stock
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -21,6 +21,15 @@ scheduler.add_job(
     replace_existing=True
 )
 
+# CRON JOB: Jalan tiap hari jam 1 pagi
+def cron_post_stock():
+    scheduler.add_job(
+        post_stock,
+        CronTrigger(hour=1, minute=0),
+        id="daily_post_stock",
+        replace_existing=True
+    )
+
 
 @app.post("/submit-order")
 async def submit_order(payload: ManualPostInvoiceKino, background_tasks: BackgroundTasks):
@@ -36,7 +45,7 @@ async def submit_order(payload: ManualPostInvoiceKino, background_tasks: Backgro
     }
 
 @app.post("/post-stock")
-async def ids_post_stock(payload: ManualPostStock):
+async def ids_post_stock(payload: KinoPostStock):
     data_dict = payload.dict()
     post_stock(data_dict)
     return {
