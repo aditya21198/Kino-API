@@ -500,29 +500,50 @@ def get_all_balance_kino_item(item_code: str = None, warehouse: str = None):
     """
     return execute_query_fetch(query=query, params=tuple(params))
 
+def get_warehouse_mapping():
+    query = """
+    select warehouse,whloc1,whloc2 from `tabKino Warehouse Mapping`
+    where parent = 'Kino API Settings'
+    """
+    result = execute_query_fetch(query=query)
+    if result:
+        return result
+    else:
+        raise Exception("Please Set Kino Warehouse Mapping")
+
 
 def create_stock_payload(item_code:str=None,warehouse:str=None):
-    whloc1 = "4001",
-    whloc2 = "01",
     header = {
     "INTERFACEID": "T006",
     "CLIENTID": "12",
     "DATA":[]
     }
     detail = []
-    kino_stock_balance = get_all_balance_kino_item(item_code=item_code,warehouse=warehouse)
-    for kino_stock in kino_stock_balance:
-        item_code = remove_kn(kino_stock.get('item_code'))
-        detail.append({
-            "PRDCODE": item_code,
-            "WHLOC1": whloc1,
-            "WHLOC2": whloc2,
-            "QTY": kino_stock.get('balance')
+    try:
+        kino_stock_balance = get_all_balance_kino_item(item_code=item_code,warehouse=warehouse)
+        for kino_stock in kino_stock_balance:
+            warehouse_mapping = get_warehouse_mapping()
+            whloc1 = None
+            whloc2 = None
+            for warehouse in warehouse_mapping:
+                if warehouse.get('warehouse') == kino_stock.get('warehouse'):
+                    whloc1 = warehouse.get('whloc1')
+                    whloc2 = warehouse.get('whloc2')
+            item_code = remove_kn(kino_stock.get('item_code'))
+            if not whloc1 and not whloc2:
+                raise Exception (f"Warehouse Mapping Not Found for warehouse {kino_stock.get('warehouse')}")
+            detail.append({
+                "PRDCODE": item_code,
+                "WHLOC1": whloc1,
+                "WHLOC2": whloc2,
+                "QTY": kino_stock.get('balance')
+            })
+        header['DATA'].append({
+            'DETAIL':detail
         })
-    header['DATA'].append({
-        'DETAIL':detail
-    })
-    return header
+        return header
+    except Exception as error:
+        raise Exception(traceback.format_exc())
     
 
 def post_stock(data: KinoPostStock):
@@ -593,8 +614,8 @@ def post_stock(data: KinoPostStock):
             "url": url,
             "title": "POST_IDS_STOCK",
             "method": "POST",
-            "status_code": response.status_code,
-            "kino_status":response.json().get("STATUSDESC",None),
+            "status_code": response.status_code if response else None,
+            "kino_status":response.json().get("STATUSDESC",None) if response else None,
             "request": payload,
             "response": response.json()
         })
