@@ -369,10 +369,10 @@ def create_post_invoice_payload(order_ref:str = None,start_date:str = None,end_d
         ORDER BY calc.po_no, calc.name, calc.idx, calc.pi_idx;
     """
     try:
-        # result = execute_query_fetch(query=query,params=(start_date,end_date))
-        # payloads = build_payload(result=result)
+        result = execute_query_fetch(query=query,params=(start_date,end_date))
+        payloads = build_payload(result=result)
         # for test
-        payloads = mock_data()
+        # payloads = mock_data()
 
         return payloads
     except Exception as error:
