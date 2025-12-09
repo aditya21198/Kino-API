@@ -545,7 +545,7 @@ def post_stock(data: KinoPostStock):
         }
 
         # Convert Pydantic model → JSON
-        payload = json.dumps(payload)
+        payload = json.dumps(payloads)
         response = requests.post(
             url,
             json=payload,
