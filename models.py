@@ -68,3 +68,19 @@ class ManualPostInvoiceKino(BaseModel):
     ORDER_REF:Optional[str] = None
     START_DATE:str
     END_DATE:str
+
+class DetailItem(BaseModel):
+    PRDCODE: str
+    WHLOC1: str
+    WHLOC2: str
+    QTY: str
+
+
+class DataItem(BaseModel):
+    DETAIL: List[DetailItem]
+
+
+class ManualPostStock(BaseModel):
+    INTERFACEID: str
+    CLIENTID: str
+    DATA: List[DataItem]

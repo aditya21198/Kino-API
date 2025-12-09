@@ -1,6 +1,7 @@
 import sys, os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import requests
+from models import ManualPostStock
 from dotenv import load_dotenv
 import os
 from datetime import datetime
@@ -13,6 +14,7 @@ import difflib
 from log_handler.logs import KinoLogger
 import re
 from kino.kino_api_test import mock_data
+from fastapi.encoders import jsonable_encoder
 
 logger = KinoLogger("kino_api_logs")
 
@@ -370,10 +372,10 @@ def create_post_invoice_payload(order_ref:str = None,start_date:str = None,end_d
         ORDER BY calc.po_no, calc.name, calc.idx, calc.pi_idx;
     """
     try:
-        result = execute_query_fetch(query=query,params=(start_date,end_date))
-        payloads = build_payload(result=result)
+        # result = execute_query_fetch(query=query,params=(start_date,end_date))
+        # payloads = build_payload(result=result)
         # for test
-        # payloads = mock_data()
+        payloads = mock_data()
 
         return payloads
     except Exception as error:
@@ -452,6 +454,7 @@ def ids_post_invoice(data_dict:dict):
         # print('result\n')
         return results
 
+
     except Exception as error:
         print(traceback.format_exc(),error)
         err_text = traceback.format_exc()
@@ -467,6 +470,80 @@ def ids_post_invoice(data_dict:dict):
         })
         
         return None
+
+def post_stock(data: ManualPostStock):
+    try:
+        token = login()['access_token']
+        print(token)
+        base_url = get_kino_config().get('kino_host')
+        url = f"{base_url}api/ids/extclient/masterpayload"
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {token}"
+        }
+
+        # Convert Pydantic model → JSON
+        payload = jsonable_encoder(data)
+
+        response = requests.post(
+            url,
+            json=payload,
+            headers=headers,
+            timeout=30
+        )
+        print(response.json())
+
+        # Handle HTTP errors
+        response.raise_for_status()
+        logger.log({
+            "url": url,
+            "title": "POST_IDS_STOCK",
+            "method": "POST",
+            "status_code": response.status_code,
+            "kino_status":response.json().get("STATUSDESC",None),
+            "request": payload,
+            "response": response.json()
+        })
+
+        return {
+            "status": "success",
+            "code": response.status_code,
+            "response": response.json()
+        }
+
+    except requests.exceptions.HTTPError as http_err:
+        logger.log({
+            "url": url,
+            "title": "POST_IDS_STOCK",
+            "method": "POST",
+            "status_code": response.status_code,
+            "kino_status":response.json().get("STATUSDESC",None),
+            "request": payload,
+            "response": response.json()
+        })
+        return {
+            "status": "http_error",
+            "error": str(http_err),
+            "response": response.text if 'response' in locals() else None
+        }
+
+    except Exception as e:
+        logger.log({
+            "url": url,
+            "title": "POST_IDS_STOCK",
+            "method": "POST",
+            "status_code": response.status_code,
+            "kino_status":response.json().get("STATUSDESC",None),
+            "request": payload,
+            "response": response.json()
+        })
+        return {
+            "status": "error",
+            "error": str(e)
+        }
+
+    
 
 # test only
 if __name__ == '__main__':
