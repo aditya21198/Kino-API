@@ -2,7 +2,7 @@ import sys, os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi import FastAPI, BackgroundTasks
 from models import ManualPostInvoiceKino,KinoPostStock
-from services import end_of_month_job
+from services import end_of_month_job,end_of_the_day_invoice_job
 from kino.kino_api import ids_post_invoice,post_stock
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -15,9 +15,9 @@ scheduler.start()
 
 # CRON JOB: Jalan tiap akhir bulan jam 23:59
 scheduler.add_job(
-    end_of_month_job,
-    CronTrigger(day="last", hour=23, minute=59),
-    id="monthly_job",
+    end_of_the_day_invoice_job,
+    CronTrigger(hour=1, minute=0),
+    id="daily_job",
     replace_existing=True
 )
 
