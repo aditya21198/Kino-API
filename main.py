@@ -13,10 +13,10 @@ scheduler = AsyncIOScheduler()
 scheduler.start()
 
 
-# CRON JOB: Jalan tiap hari jam 1 pagi
+# CRON JOB: Jalan tiap hari jam 2 pagi
 scheduler.add_job(
     end_of_the_day_invoice_job,
-    CronTrigger(hour=1, minute=0),
+    CronTrigger(hour=2, minute=0),
     id="daily_job",
     replace_existing=True
 )
@@ -44,9 +44,9 @@ async def submit_order(payload: ManualPostInvoiceKino, background_tasks: Backgro
     }
 
 @app.post("/post-stock")
-async def ids_post_stock(payload: KinoPostStock):
+async def ids_post_stock(payload: KinoPostStock,background_tasks:BackgroundTasks):
     data_dict = payload.dict()
-    post_stock(data_dict)
+    background_tasks.add_task(post_stock, data_dict)
     return {
         "status": "processing",
         "message": "Request accepted and is being processed."

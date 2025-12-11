@@ -105,7 +105,7 @@ def remove_kn(item_code: str):
         return item_code[2:]
     return item_code
 
-def get_salesman_code():
+def get_salesman_code(region_id:str):
     query = """
     SELECT gms_region,gms_entity,gms_branch,gms_salesman_id,gms_salesman_name 
     FROM `tabSalesman Mapping Detail`
@@ -113,7 +113,9 @@ def get_salesman_code():
     """
     salesman_mapping = execute_query_fetch(query=query)
     if salesman_mapping:
-        return salesman_mapping[0]
+        for salesman in salesman_mapping:
+            if salesman['gms_region'] == region_id:
+                return salesman
     raise Exception ("Salesman Not Found in Salesman mapping")
 
 def get_price_list_item(item:str,price_list:str):
@@ -151,7 +153,7 @@ def grouped_data_by_order_id(query_result:list):
                 branch_code = get_customer_code(store=store,channel=channel,region_id=region_code)[3]
                 print(get_customer_code(store=store,channel=channel,region_id=region_code))
                 print("customer\n")
-                salesman_code = get_salesman_code()['gms_salesman_id']
+                salesman_code = get_salesman_code(region_id=region_code)['gms_salesman_id']
 
                 transaction_date = row.get("transaction_date").isoformat() if row.get("transaction_date",None) else None
 
