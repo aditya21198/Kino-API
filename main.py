@@ -13,7 +13,7 @@ scheduler = AsyncIOScheduler()
 scheduler.start()
 
 
-# CRON JOB: Jalan tiap akhir bulan jam 23:59
+# CRON JOB: Jalan tiap hari jam 1 pagi
 scheduler.add_job(
     end_of_the_day_invoice_job,
     CronTrigger(hour=1, minute=0),
@@ -22,13 +22,12 @@ scheduler.add_job(
 )
 
 # CRON JOB: Jalan tiap hari jam 1 pagi
-def cron_post_stock():
-    scheduler.add_job(
-        post_stock,
-        CronTrigger(hour=1, minute=0),
-        id="daily_post_stock",
-        replace_existing=True
-    )
+scheduler.add_job(
+    post_stock,
+    CronTrigger(hour=1, minute=0),
+    id="daily_post_stock",
+    replace_existing=True
+)
 
 
 @app.post("/submit-order")

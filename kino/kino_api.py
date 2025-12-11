@@ -527,7 +527,7 @@ def create_stock_payload(item_code:str=None,warehouse:str=None):
                     whloc1 = warehouse.get('whloc1')
                     whloc2 = warehouse.get('whloc2')
             item_code = remove_kn(kino_stock.get('item_code'))
-            if not whloc1 and not whloc2:
+            if not whloc1 or not whloc2:
                 raise Exception (f"Warehouse Mapping Not Found for warehouse {kino_stock.get('warehouse')}")
             detail.append({
                 "PRDCODE": item_code,
