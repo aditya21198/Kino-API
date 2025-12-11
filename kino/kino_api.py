@@ -545,7 +545,7 @@ def create_stock_payload(item_code:str=None,warehouse:str=None):
         raise Exception(traceback.format_exc())
     
 
-def post_stock(data: KinoPostStock):
+def post_stock(data: KinoPostStock = None):
     try:
         item_code = None
         warehouse = None

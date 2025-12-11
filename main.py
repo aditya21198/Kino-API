@@ -49,5 +49,5 @@ async def ids_post_stock(payload: KinoPostStock,background_tasks:BackgroundTasks
     background_tasks.add_task(post_stock, data_dict)
     return {
         "status": "processing",
-        "message": "Request accepted and is being processed."
+        "message": "Request accepted and is being processed in background."
     }
