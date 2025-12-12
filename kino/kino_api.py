@@ -368,7 +368,7 @@ def create_post_invoice_payload(order_ref:str = None,start_date:str = None,end_d
 
         WHERE calc.quantity != 0
         {condition_sql}
-        ORDER BY calc.po_no, calc.name, calc.idx, calc.pi_idx LIMIT 2;
+        ORDER BY calc.po_no, calc.name, calc.idx, calc.pi_idx;
     """
     try:
         result = execute_query_fetch(query=query,params=(start_date,end_date))
@@ -512,7 +512,6 @@ def get_warehouse_mapping():
 
 
 def create_stock_payload(item_code:str=None,warehouse:str=None):
-
     header = {
     "INTERFACEID": "T006",
     "CLIENTID":get_kino_config().get("kino_client_id"),
