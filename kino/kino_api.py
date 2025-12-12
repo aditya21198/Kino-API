@@ -10,7 +10,7 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 from log_handler.logs import KinoLogger
-from kino.kino_api_test import mock_data
+from kino.kino_api_test import mock_data,mock_post_stock
 from fastapi.encoders import jsonable_encoder
 
 logger = KinoLogger("kino_api_logs")
@@ -535,7 +535,7 @@ def create_stock_payload(item_code:str=None,warehouse:str=None):
                 "PRDCODE": item_code,
                 "WHLOC1": whloc1,
                 "WHLOC2": whloc2,
-                "QTY": kino_stock.get('balance')
+                "QTY": int(kino_stock.get('balance'))
             })
         header['DATA'].append({
             'DETAIL':detail
@@ -553,6 +553,8 @@ def post_stock(data: KinoPostStock = None):
             item_code = data.get('item_code',None)
             warehouse = data.get('warehouse',None)
         payloads = create_stock_payload(item_code = item_code,warehouse=warehouse)
+        # for test 
+        # payloads = mock_post_stock()
 
         token = login()['access_token']
         print(token)
@@ -563,14 +565,10 @@ def post_stock(data: KinoPostStock = None):
             "Content-Type": "application/json",
             "Authorization": f"Bearer {token}"
         }
-
-        # Convert Pydantic model → JSON
-        payload = json.dumps(payloads)
         response = requests.post(
             url,
-            json=payload,
-            headers=headers,
-            timeout=30
+            json=payloads,
+            headers=headers
         )
         print(response.json())
 
@@ -582,7 +580,7 @@ def post_stock(data: KinoPostStock = None):
             "method": "POST",
             "status_code": response.status_code,
             "kino_status":response.json().get("STATUSDESC",None),
-            "request": payload,
+            "request": payloads,
             "response": response.json()
         })
 
@@ -599,7 +597,7 @@ def post_stock(data: KinoPostStock = None):
             "method": "POST",
             "status_code": response.status_code,
             "kino_status":response.json().get("STATUSDESC",None),
-            "request": payload,
+            "request": payloads,
             "response": response.json()
         })
         return {
@@ -615,7 +613,7 @@ def post_stock(data: KinoPostStock = None):
             "method": "POST",
             "status_code": response.status_code if response else None,
             "kino_status":response.json().get("STATUSDESC",None) if response else None,
-            "request": payload,
+            "request": payloads,
             "response": response.json()
         })
         return {
@@ -628,7 +626,7 @@ def post_stock(data: KinoPostStock = None):
 # test only
 if __name__ == '__main__':
     try:
-        print(create_post_invoice_payload(start_date='2025-11-01',end_date='2025-11-31'))
+        print(create_stock_payload(item_code='KN101001',warehouse='Pulogadung - ARBI'))
     except Exception as e:
         print(f"{datetime.now()} : Error in main function", flush=True)
         print(traceback.format_exc())

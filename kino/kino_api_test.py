@@ -127,3 +127,21 @@ def mock_data():
         }
     ]
     return payloads
+
+def mock_post_stock():
+    return {
+    'INTERFACEID': 'T006',
+    'CLIENTID': '12',
+    'DATA': [
+        {
+            'DETAIL': [
+                {
+                    'PRDCODE': '101001',
+                    'WHLOC1': '4001',
+                    'WHLOC2': '01',
+                    'QTY': 30
+                }
+            ]
+        }
+    ]
+}
