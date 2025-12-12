@@ -253,7 +253,7 @@ def build_payload(result: list):
             # buat header baru untuk setiap order
             header = {
                 "INTERFACEID": "T007",
-                "CLIENTID": "12",
+                "CLIENTID": get_kino_config().get("kino_client_id"),
                 "DATA": []
             }
             order_header = grouped_data[key][0]
@@ -368,7 +368,7 @@ def create_post_invoice_payload(order_ref:str = None,start_date:str = None,end_d
 
         WHERE calc.quantity != 0
         {condition_sql}
-        ORDER BY calc.po_no, calc.name, calc.idx, calc.pi_idx;
+        ORDER BY calc.po_no, calc.name, calc.idx, calc.pi_idx LIMIT 2;
     """
     try:
         result = execute_query_fetch(query=query,params=(start_date,end_date))
@@ -512,9 +512,10 @@ def get_warehouse_mapping():
 
 
 def create_stock_payload(item_code:str=None,warehouse:str=None):
+
     header = {
     "INTERFACEID": "T006",
-    "CLIENTID": "12",
+    "CLIENTID":get_kino_config().get("kino_client_id"),
     "DATA":[]
     }
     detail = []
@@ -628,7 +629,7 @@ def post_stock(data: KinoPostStock = None):
 # test only
 if __name__ == '__main__':
     try:
-        print(create_stock_payload())
+        print(create_post_invoice_payload(start_date='2025-11-01',end_date='2025-11-31'))
     except Exception as e:
         print(f"{datetime.now()} : Error in main function", flush=True)
         print(traceback.format_exc())
