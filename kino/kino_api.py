@@ -448,7 +448,7 @@ def send_single_invoice(payload: json):
         "Authorization": f"Bearer {token}"
     }
     try:
-        response = requests.post(url, json=payload, headers=headers)
+        response = requests.post(url, json=data, headers=headers)
 
         log_data = {
             "url": url,
@@ -644,43 +644,79 @@ def post_stock(data: KinoPostStock = None):
         if data:
             item_code = data.get('item_code',None)
             warehouse = data.get('warehouse',None)
-        payloads = create_stock_payload(item_code = item_code,warehouse=warehouse)
+        header_maxlife, header_without_maxlife = create_stock_payload(item_code = item_code,warehouse=warehouse)
         # for test 
         # payloads = mock_post_stock()
+        if header_maxlife:
+            payloads = header_maxlife
+            token = login(maxlife=True)['access_token']
+            print(token)
+            base_url = get_kino_config().get('kino_host')
+            url = f"{base_url}api/ids/extclient/masterpayload"
 
-        token = login()['access_token']
-        print(token)
-        base_url = get_kino_config().get('kino_host')
-        url = f"{base_url}api/ids/extclient/masterpayload"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {token}"
+            }
+            response = requests.post(
+                url,
+                json=header_maxlife,
+                headers=headers
+            )
+            print(response.json())
 
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {token}"
-        }
-        response = requests.post(
-            url,
-            json=payloads,
-            headers=headers
-        )
-        print(response.json())
+            # Handle HTTP errors
+            response.raise_for_status()
+            logger.log({
+                "url": url,
+                "title": "POST_IDS_STOCK",
+                "method": "POST",
+                "status_code": response.status_code,
+                "kino_status":response.json().get("STATUSDESC",None),
+                "request": header_maxlife,
+                "response": response.json()
+            })
 
-        # Handle HTTP errors
-        response.raise_for_status()
-        logger.log({
-            "url": url,
-            "title": "POST_IDS_STOCK",
-            "method": "POST",
-            "status_code": response.status_code,
-            "kino_status":response.json().get("STATUSDESC",None),
-            "request": payloads,
-            "response": response.json()
-        })
+            return {
+                "status": "success",
+                "code": response.status_code,
+                "response": response.json()
+            }
+        if header_without_maxlife:
+            payloads = header_without_maxlife
+            token = login(maxlife=False)['access_token']
+            print(token)
+            base_url = get_kino_config().get('kino_host')
+            url = f"{base_url}api/ids/extclient/masterpayload"
 
-        return {
-            "status": "success",
-            "code": response.status_code,
-            "response": response.json()
-        }
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {token}"
+            }
+            response = requests.post(
+                url,
+                json=header_maxlife,
+                headers=headers
+            )
+            print(response.json())
+
+            # Handle HTTP errors
+            response.raise_for_status()
+            logger.log({
+                "url": url,
+                "title": "POST_IDS_STOCK",
+                "method": "POST",
+                "status_code": response.status_code,
+                "kino_status":response.json().get("STATUSDESC",None),
+                "request": header_maxlife,
+                "response": response.json()
+            })
+
+            return {
+                "status": "success",
+                "code": response.status_code,
+                "response": response.json()
+            }
 
     except requests.exceptions.HTTPError as http_err:
         logger.log({
