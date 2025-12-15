@@ -4,8 +4,8 @@ import requests
 from models import KinoPostStock
 from dotenv import load_dotenv
 import os
-from datetime import datetime
-from database import execute_query_fetch,get_price_list
+from datetime import datetime,timedelta
+from database import execute_query_fetch,get_price_list,update_table
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
@@ -17,59 +17,109 @@ logger = KinoLogger("kino_api_logs")
 
 load_dotenv()
 
-def get_kino_config():
+def get_kino_config(maxlife=False):
     kino_config = {
         'kino_host':None,
         'kino_client_id':None,
-        'kino_client_secret':None
+        'kino_client_secret':None,
+        'kino_access_token':None,
+        'kino_access_token_creation':None
     }
     query = """
         SELECT *
-        FROM tabSingles 
+        FROM tabSingles
         WHERE doctype = 'Kino API Settings'
-        AND field IN ('kino_client_id','kino_client_secret','kino_host')
+        AND field IN ('kino_client_id','kino_client_secret','kino_host','kino_access_token','access_token_creation','kino_host_maxlife','kino_client_id_maxlife','kino_client_secret_maxlife','kino_access_token_maxlife','access_token_creation_maxlife'access_token_creation_maxlife)
     """
     result = execute_query_fetch(query=query)
     if result:
-        for row in result:
-            if row.get('field') == "kino_host":
-                kino_config['kino_host'] = row.get('value')
-            if row.get('field') == 'kino_client_id':
-                kino_config['kino_client_id'] = row.get('value')
-            if row.get('field') == 'kino_client_secret':
-                kino_config['kino_client_secret'] = row.get('value')
+        if maxlife == False:
+            for row in result:
+                if row.get('field') == "kino_host":
+                    kino_config['kino_host'] = row.get('value')
+                if row.get('field') == 'kino_client_id':
+                    kino_config['kino_client_id'] = row.get('value')
+                if row.get('field') == 'kino_client_secret':
+                    kino_config['kino_client_secret'] = row.get('value')
+                if row.get('field') == 'kino_access_token':
+                    kino_config['kino_access_token'] = row.get('value') or None 
+                if row.get('field') == 'access_token_creation':
+                    kino_config['kino_access_token_creation'] = row.get('value') or None
+        else:
+            for row in result:
+                if row.get('field') == "kino_host_maxlife":
+                    kino_config['kino_host'] = row.get('value')
+                if row.get('field') == 'kino_client_id_maxlife':
+                    kino_config['kino_client_id'] = row.get('value')
+                if row.get('field') == 'kino_client_secret_maxlife':
+                    kino_config['kino_client_secret'] = row.get('value')
+                if row.get('field') == 'kino_access_token_maxlife':
+                    kino_config['kino_access_token'] = row.get('value') or None 
+                if row.get('field') == 'access_token_creation_maxlife':
+                    kino_config['kino_access_token_creation'] = row.get('value') or None
     return kino_config
 
+def update_single(value,field):
+    query = f"""
+        UPDATE `tabSingles`
+        SET value = '{value}'
+        WHERE doctype = 'Kino API Settings'
+        AND field = '{field}';
+    """
+    result_update = update_table(query=query)
+    return result_update
+    
 
-def login():
+def login(maxlife=False):
     # if using env
     # url = os.getenv("KINO_GET_LOGIN_URL")
     # client_id = os.getenv("KINO_CLIENT_ID")
     # client_secret = os.getenv("KINO_CLIENT_SECRET")
+    def token_expired(token_creation):
+        if not token_creation:
+            return True
 
-    url = get_kino_config().get("kino_host")+'oauth/token'
-    client_id = get_kino_config().get("kino_client_id")
-    client_secret = get_kino_config().get("kino_client_secret")
-    payload = {
-        "grant_type": "client_credentials",
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "scope": "*"
-    }
+        # kalau disimpan string
+        if isinstance(token_creation, str):
+            token_creation_dt = datetime.fromisoformat(token_creation)
+        else:
+            token_creation_dt = token_creation
 
-    headers = {
-        "Content-Type": "application/x-www-form-urlencoded"
-    }
+        return datetime.now() - token_creation_dt > timedelta(hours=24)
 
-    try:
-        response = requests.post(url, data=payload, headers=headers)
-        response.raise_for_status()
-        print(response.json())
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        print("Login API Error:", str(e))
-        print("Response text:", getattr(e.response, "text", ""))
-        return None
+    url = get_kino_config(maxlife=maxlife).get("kino_host")+'oauth/token'
+    client_id = get_kino_config(maxlife=maxlife).get("kino_client_id")
+    client_secret = get_kino_config(maxlife=maxlife).get("kino_client_secret")
+    client_token = get_kino_config(maxlife=maxlife).get("kino_access_token")
+    client_token_ceration = get_kino_config(maxlife=maxlife).get("kino_access_token_creation")
+    if not client_token or token_expired(client_token_ceration):
+        payload = {
+            "grant_type": "client_credentials",
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "scope": "*"
+        }
+
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded"
+        }
+
+        try:
+            response = requests.post(url, data=payload, headers=headers)
+            response.raise_for_status()
+            print(response.json())
+            if maxlife:
+                update_single(response.json()['access_token'],'kino_access_token_maxlife')
+                update_single(datetime.now().date(),'access_token_creation_maxlife')
+            else:
+                update_single(response.json()['access_token'],'kino_access_token')
+                update_single(datetime.now().date(),'access_token_creation')
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            print("Login API Error:", str(e))
+            print("Response text:", getattr(e.response, "text", ""))
+            return None
+        
     
 
 def get_customer_code(store:str,channel:str,region_id:str):
