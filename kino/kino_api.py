@@ -17,46 +17,65 @@ logger = KinoLogger("kino_api_logs")
 
 load_dotenv()
 
-def get_kino_config(maxlife=False):
+_KINO_CONFIG_CACHE = {}
+
+def get_kino_config(maxlife=False, force_reload=False):
+    cache_key = "maxlife" if maxlife else "normal"
+
+    if not force_reload and cache_key in _KINO_CONFIG_CACHE:
+        return _KINO_CONFIG_CACHE[cache_key]
+
     kino_config = {
-        'kino_host':None,
-        'kino_client_id':None,
-        'kino_client_secret':None,
-        'kino_access_token':None,
-        'kino_access_token_creation':None
+        'kino_host': None,
+        'kino_client_id': None,
+        'kino_client_secret': None,
+        'kino_access_token': None,
+        'kino_access_token_creation': None
     }
+
     query = """
-        SELECT *
+        SELECT field, value
         FROM tabSingles
         WHERE doctype = 'Kino API Settings'
-        AND field IN ('kino_client_id','kino_client_secret','kino_host','kino_access_token','access_token_creation','kino_host_maxlife','kino_client_id_maxlife','kino_client_secret_maxlife','kino_access_token_maxlife','access_token_creation_maxlife');
+        AND field IN (
+            'kino_client_id','kino_client_secret','kino_host',
+            'kino_access_token','access_token_creation',
+            'kino_host_maxlife','kino_client_id_maxlife',
+            'kino_client_secret_maxlife','kino_access_token_maxlife',
+            'access_token_creation_maxlife'
+        )
     """
     result = execute_query_fetch(query=query)
+
     if result:
-        if maxlife == False:
-            for row in result:
-                if row.get('field') == "kino_host":
-                    kino_config['kino_host'] = row.get('value')
-                if row.get('field') == 'kino_client_id':
-                    kino_config['kino_client_id'] = row.get('value')
-                if row.get('field') == 'kino_client_secret':
-                    kino_config['kino_client_secret'] = row.get('value')
-                if row.get('field') == 'kino_access_token':
-                    kino_config['kino_access_token'] = row.get('value') or None 
-                if row.get('field') == 'access_token_creation':
-                    kino_config['kino_access_token_creation'] = row.get('value') or None
-        else:
-            for row in result:
-                if row.get('field') == "kino_host_maxlife":
-                    kino_config['kino_host'] = row.get('value')
-                if row.get('field') == 'kino_client_id_maxlife':
-                    kino_config['kino_client_id'] = row.get('value')
-                if row.get('field') == 'kino_client_secret_maxlife':
-                    kino_config['kino_client_secret'] = row.get('value')
-                if row.get('field') == 'kino_access_token_maxlife':
-                    kino_config['kino_access_token'] = row.get('value') or None 
-                if row.get('field') == 'access_token_creation_maxlife':
-                    kino_config['kino_access_token_creation'] = row.get('value') or None
+        for row in result:
+            f = row["field"]
+            v = row["value"]
+
+            if not maxlife:
+                if f == "kino_host":
+                    kino_config["kino_host"] = v
+                elif f == "kino_client_id":
+                    kino_config["kino_client_id"] = v
+                elif f == "kino_client_secret":
+                    kino_config["kino_client_secret"] = v
+                elif f == "kino_access_token":
+                    kino_config["kino_access_token"] = v
+                elif f == "access_token_creation":
+                    kino_config["kino_access_token_creation"] = v
+            else:
+                if f == "kino_host_maxlife":
+                    kino_config["kino_host"] = v
+                elif f == "kino_client_id_maxlife":
+                    kino_config["kino_client_id"] = v
+                elif f == "kino_client_secret_maxlife":
+                    kino_config["kino_client_secret"] = v
+                elif f == "kino_access_token_maxlife":
+                    kino_config["kino_access_token"] = v
+                elif f == "access_token_creation_maxlife":
+                    kino_config["kino_access_token_creation"] = v
+
+    _KINO_CONFIG_CACHE[cache_key] = kino_config
     return kino_config
 
 def update_single(value,field):
