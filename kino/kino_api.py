@@ -108,12 +108,13 @@ def login(maxlife=False):
             response = requests.post(url, data=payload, headers=headers)
             response.raise_for_status()
             print(response.json())
+            date_now = datetime.now().date().strftime("%Y-%m-%d")
             if maxlife:
                 update_single(response.json()['access_token'],'kino_access_token_maxlife')
-                update_single(datetime.now().date(),'access_token_creation_maxlife')
+                update_single(date_now,'access_token_creation_maxlife')
             else:
                 update_single(response.json()['access_token'],'kino_access_token')
-                update_single(datetime.now().date(),'access_token_creation')
+                update_single(date_now,'access_token_creation')
             return response.json()
         except requests.exceptions.RequestException as e:
             print("Login API Error:", str(e))
@@ -303,7 +304,7 @@ def build_payload(result: list):
             # buat header baru untuk setiap order
             header = {
                 "INTERFACEID": "T007",
-                "CLIENTID": get_kino_config().get("kino_client_id"),
+                "CLIENTID": None,
                 "DATA": []
             }
             order_header = grouped_data[key][0]
@@ -430,7 +431,22 @@ def create_post_invoice_payload(order_ref:str = None,start_date:str = None,end_d
     except Exception as error:
         raise Exception(traceback.format_exc())
 
-def send_single_invoice(url: str, headers: dict, payload: json):
+def send_single_invoice(payload: json):
+    data = json.loads(payload)
+    token = login(maxlife=False)['access_token']
+    if data['DATA'][0].get('REGION_CODE') == '1002':
+        token = login(maxlife=True)['access_token']
+        data['CLIENTID'] = get_kino_config(maxlife=True).get('kino_client_id')
+    else:
+        data['CLIENTID'] = get_kino_config(maxlife=False).get('kino_client_id')
+
+    # if using env
+    # url = os.getenv("KINO_IDS_POST_INVOICE_URL")
+    url = get_kino_config().get('kino_host')+'api/ids/extclient/masterpayload'
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {token}"
+    }
     try:
         response = requests.post(url, json=payload, headers=headers)
 
@@ -471,14 +487,6 @@ def send_single_invoice(url: str, headers: dict, payload: json):
 
 
 def ids_post_invoice(data_dict:dict):
-    token = login()['access_token']
-    # if using env
-    # url = os.getenv("KINO_IDS_POST_INVOICE_URL")
-    url = get_kino_config().get('kino_host')+'api/ids/extclient/masterpayload'
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {token}"
-    }
     order_ref = None
     start_date = None
     end_date = None
@@ -492,7 +500,7 @@ def ids_post_invoice(data_dict:dict):
         with ThreadPoolExecutor(max_workers=10) as executor:
             # max_workers=10 → 10 thread paralel
             future_to_payload = {
-                executor.submit(send_single_invoice, url, headers, payload): json.dumps(payload)
+                executor.submit(send_single_invoice,payload): json.dumps(payload)
                 for payload in payloads
             }
 
@@ -508,7 +516,7 @@ def ids_post_invoice(data_dict:dict):
         print(traceback.format_exc(),error)
         err_text = traceback.format_exc()
         logger.log({
-            "url": url,
+            "url": None,
             "title": "INVOICE_ERROR",
             "order_ref":None,
             "method": "POST",
@@ -540,7 +548,8 @@ def get_all_balance_kino_item(item_code: str = None, warehouse: str = None):
         SELECT
             sle.item_code,
             sle.warehouse,
-            SUM(sle.actual_qty) AS balance
+            SUM(sle.actual_qty) AS balance,
+            it.sub_brand
         FROM `tabStock Ledger Entry` sle
         INNER JOIN `tabItem` it ON it.name = sle.item_code
         {conditions}
@@ -561,37 +570,70 @@ def get_warehouse_mapping():
         raise Exception("Please Set Kino Warehouse Mapping")
 
 
-def create_stock_payload(item_code:str=None,warehouse:str=None):
-    header = {
-    "INTERFACEID": "T006",
-    "CLIENTID":get_kino_config().get("kino_client_id"),
-    "DATA":[]
+def create_stock_payload(item_code: str = None, warehouse: str = None):
+    header_maxlife = {
+        "INTERFACEID": "T006",
+        "CLIENTID": get_kino_config().get("kino_client_id"),
+        "DATA": []
     }
-    detail = []
+
+    header_without_maxlife = {
+        "INTERFACEID": "T006",
+        "CLIENTID": get_kino_config().get("kino_sclient_id_maxlife"),
+        "DATA": []
+    }
+
     try:
-        kino_stock_balance = get_all_balance_kino_item(item_code=item_code,warehouse=warehouse)
+        kino_stock_balance = get_all_balance_kino_item(
+            item_code=item_code,
+            warehouse=warehouse
+        )
+
+        warehouse_mapping = get_warehouse_mapping()
+
+        maxlife_detail = []
+        non_maxlife_detail = []
+
         for kino_stock in kino_stock_balance:
-            warehouse_mapping = get_warehouse_mapping()
             whloc1 = None
             whloc2 = None
-            for warehouse in warehouse_mapping:
-                if warehouse.get('warehouse') == kino_stock.get('warehouse'):
-                    whloc1 = warehouse.get('whloc1')
-                    whloc2 = warehouse.get('whloc2')
-            item_code = remove_kn(kino_stock.get('item_code'))
+
+            for wh in warehouse_mapping:
+                if wh.get("warehouse") == kino_stock.get("warehouse"):
+                    whloc1 = wh.get("whloc1")
+                    whloc2 = wh.get("whloc2")
+                    break
+
             if not whloc1 or not whloc2:
-                raise Exception (f"Warehouse Mapping Not Found for warehouse {kino_stock.get('warehouse')}")
-            detail.append({
-                "PRDCODE": item_code,
+                raise Exception(
+                    f"Warehouse Mapping Not Found for warehouse {kino_stock.get('warehouse')}"
+                )
+
+            detail_row = {
+                "PRDCODE": remove_kn(kino_stock.get("item_code")),
                 "WHLOC1": whloc1,
                 "WHLOC2": whloc2,
-                "QTY": int(kino_stock.get('balance'))
+                "QTY": int(kino_stock.get("balance"))
+            }
+
+            if kino_stock.get("sub_brand") == "MAXLIFE":
+                maxlife_detail.append(detail_row)
+            else:
+                non_maxlife_detail.append(detail_row)
+
+        if maxlife_detail:
+            header_maxlife["DATA"].append({
+                "DETAIL": maxlife_detail
             })
-        header['DATA'].append({
-            'DETAIL':detail
-        })
-        return header
-    except Exception as error:
+
+        if non_maxlife_detail:
+            header_without_maxlife["DATA"].append({
+                "DETAIL": non_maxlife_detail
+            })
+
+        return header_maxlife, header_without_maxlife
+
+    except Exception:
         raise Exception(traceback.format_exc())
     
 
@@ -676,7 +718,7 @@ def post_stock(data: KinoPostStock = None):
 # test only
 if __name__ == '__main__':
     try:
-        print(create_stock_payload(item_code='KN101001',warehouse='Pulogadung - ARBI'))
+        print(create_stock_payload())
     except Exception as e:
         print(f"{datetime.now()} : Error in main function", flush=True)
         print(traceback.format_exc())
