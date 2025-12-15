@@ -770,7 +770,7 @@ def post_stock(data: KinoPostStock = None):
                 })
     except Exception as e:
         logger.log({
-            "title": "POST_IDS_STOCK",
+            "title": "STOCK_ERROR",
             "method": "POST",
             "status_code": None,
             "kino_status":None,
