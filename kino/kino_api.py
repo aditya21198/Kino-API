@@ -10,7 +10,7 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 from log_handler.logs import KinoLogger
-from kino.kino_api_test import mock_data,mock_post_stock
+from kino.kino_api_test import mock_data,mock_post_stock_maxlife,mock_post_stock_non_maxlife
 from fastapi.encoders import jsonable_encoder
 
 logger = KinoLogger("kino_api_logs")
@@ -120,6 +120,10 @@ def login(maxlife=False):
             print("Login API Error:", str(e))
             print("Response text:", getattr(e.response, "text", ""))
             return None
+    else:
+        return {
+            "access_token": client_token
+        }
         
     
 
@@ -642,6 +646,12 @@ def create_stock_payload(item_code: str = None, warehouse: str = None):
         raise Exception(traceback.format_exc())
     
 
+def safe_response_json(response):
+    try:
+        return response.json()
+    except ValueError:
+        return None
+
 def post_stock(data: KinoPostStock = None):
     try:
         item_code = None
@@ -650,8 +660,9 @@ def post_stock(data: KinoPostStock = None):
             item_code = data.get('item_code',None)
             warehouse = data.get('warehouse',None)
         header_maxlife, header_without_maxlife = create_stock_payload(item_code = item_code,warehouse=warehouse)
-        # for test 
-        # payloads = mock_post_stock()
+        # for test only
+        # header_maxlife= mock_post_stock_maxlife()
+        # header_without_maxlife = mock_post_stock_non_maxlife()
         if header_maxlife:
             try:
                 payloads = header_maxlife
@@ -669,8 +680,7 @@ def post_stock(data: KinoPostStock = None):
                     json=header_maxlife,
                     headers=headers
                 )
-                print(response.json())
-
+                resp_json = safe_response_json(response)
                 # Handle HTTP errors
                 response.raise_for_status()
                 logger.log({
@@ -678,16 +688,10 @@ def post_stock(data: KinoPostStock = None):
                     "title": "POST_IDS_STOCK",
                     "method": "POST",
                     "status_code": response.status_code,
-                    "kino_status":response.json().get("STATUSDESC",None),
+                    "kino_status":resp_json.get("STATUSDESC") if resp_json else response.text,
                     "request": header_maxlife,
-                    "response": response.json()
+                    "response": resp_json if resp_json else response.text
                 })
-
-                return {
-                    "status": "success",
-                    "code": response.status_code,
-                    "response": response.json()
-                }
             except requests.exceptions.HTTPError as http_err:
                 base_url = get_kino_config().get('kino_host')
                 url = f"{base_url}api/ids/extclient/masterpayload"
@@ -696,15 +700,10 @@ def post_stock(data: KinoPostStock = None):
                     "title": "POST_IDS_STOCK",
                     "method": "POST",
                     "status_code": response.status_code,
-                    "kino_status":response.json().get("STATUSDESC",None),
-                    "request": payloads,
-                    "response": response.json()
+                    "kino_status":resp_json.get("STATUSDESC") if resp_json else response.text,
+                    "request": header_maxlife,
+                    "response": resp_json if resp_json else response.text
                 })
-                return {
-                    "status": "http_error",
-                    "error": str(http_err),
-                    "response": response.text if 'response' in locals() else None
-                }
         if header_without_maxlife:
             try:
                 payloads = header_without_maxlife
@@ -719,11 +718,11 @@ def post_stock(data: KinoPostStock = None):
                 }
                 response = requests.post(
                     url,
-                    json=header_maxlife,
+                    json=header_without_maxlife,
                     headers=headers
                 )
-                print(response.json())
 
+                resp_json = safe_response_json(response)
                 # Handle HTTP errors
                 response.raise_for_status()
                 logger.log({
@@ -731,16 +730,10 @@ def post_stock(data: KinoPostStock = None):
                     "title": "POST_IDS_STOCK",
                     "method": "POST",
                     "status_code": response.status_code,
-                    "kino_status":response.json().get("STATUSDESC",None),
-                    "request": header_maxlife,
-                    "response": response.json()
+                    "kino_status":resp_json.get("STATUSDESC") if resp_json else response.text,
+                    "request": header_without_maxlife,
+                    "response": resp_json if resp_json else response.text
                 })
-
-                return {
-                    "status": "success",
-                    "code": response.status_code,
-                    "response": response.json()
-                }
             except requests.exceptions.HTTPError as http_err:
                 base_url = get_kino_config().get('kino_host')
                 url = f"{base_url}api/ids/extclient/masterpayload"
@@ -749,15 +742,10 @@ def post_stock(data: KinoPostStock = None):
                     "title": "POST_IDS_STOCK",
                     "method": "POST",
                     "status_code": response.status_code,
-                    "kino_status":response.json().get("STATUSDESC",None),
-                    "request": payloads,
-                    "response": response.json()
+                    "kino_status":resp_json.get("STATUSDESC") if resp_json else response.text,
+                    "request": header_without_maxlife,
+                    "response": resp_json if resp_json else response.text
                 })
-                return {
-                    "status": "http_error",
-                    "error": str(http_err),
-                    "response": response.text if 'response' in locals() else None
-                }
     except Exception as e:
         logger.log({
             "title": "POST_IDS_STOCK",

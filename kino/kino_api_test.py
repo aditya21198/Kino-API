@@ -128,20 +128,29 @@ def mock_data():
     ]
     return payloads
 
-def mock_post_stock():
+def mock_post_stock_maxlife():
     return {
-    'INTERFACEID': 'T006',
-    'CLIENTID': '12',
-    'DATA': [
-        {
-            'DETAIL': [
-                {
-                    'PRDCODE': '101001',
-                    'WHLOC1': '4001',
-                    'WHLOC2': '01',
-                    'QTY': 30
-                }
-            ]
-        }
-    ]
-}
+        "INTERFACEID": "T006",
+        "CLIENTID": "33",
+        "DATA": [
+            {
+                "DETAIL": [
+                    {"PRDCODE": "601004", "WHLOC1": "4001", "WHLOC2": "01", "QTY": 197}
+                ]
+            }
+        ]
+    }
+
+def mock_post_stock_non_maxlife():
+    return     {
+        "INTERFACEID": "T006",
+        "CLIENTID": "33",
+        "DATA": [
+            {
+                "DETAIL": [
+                    {"PRDCODE": "101001", "WHLOC1": "4001", "WHLOC2": "01", "QTY": 95}
+                
+                ]
+            }
+        ]
+    }
