@@ -29,7 +29,7 @@ def get_kino_config(maxlife=False):
         SELECT *
         FROM tabSingles
         WHERE doctype = 'Kino API Settings'
-        AND field IN ('kino_client_id','kino_client_secret','kino_host','kino_access_token','access_token_creation','kino_host_maxlife','kino_client_id_maxlife','kino_client_secret_maxlife','kino_access_token_maxlife','access_token_creation_maxlife'access_token_creation_maxlife)
+        AND field IN ('kino_client_id','kino_client_secret','kino_host','kino_access_token','access_token_creation','kino_host_maxlife','kino_client_id_maxlife','kino_client_secret_maxlife','kino_access_token_maxlife','access_token_creation_maxlife');
     """
     result = execute_query_fetch(query=query)
     if result:
@@ -437,12 +437,13 @@ def send_single_invoice(payload: json):
     if data['DATA'][0].get('REGION_CODE') == '1002':
         token = login(maxlife=True)['access_token']
         data['CLIENTID'] = get_kino_config(maxlife=True).get('kino_client_id')
+        url = get_kino_config(maxlife=True).get('kino_host')+'api/ids/extclient/masterpayload'
     else:
         data['CLIENTID'] = get_kino_config(maxlife=False).get('kino_client_id')
+        url = get_kino_config(maxlife=False).get('kino_host')+'api/ids/extclient/masterpayload'
 
     # if using env
     # url = os.getenv("KINO_IDS_POST_INVOICE_URL")
-    url = get_kino_config().get('kino_host')+'api/ids/extclient/masterpayload'
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {token}"
@@ -573,15 +574,19 @@ def get_warehouse_mapping():
 def create_stock_payload(item_code: str = None, warehouse: str = None):
     header_maxlife = {
         "INTERFACEID": "T006",
-        "CLIENTID": get_kino_config().get("kino_client_id"),
+        "CLIENTID": get_kino_config(maxlife=True).get("kino_client_id"),
         "DATA": []
     }
+    print(get_kino_config(maxlife=True).get("kino_client_id"))
+    print("maxlife")
 
     header_without_maxlife = {
         "INTERFACEID": "T006",
-        "CLIENTID": get_kino_config().get("kino_sclient_id_maxlife"),
+        "CLIENTID": get_kino_config(maxlife=False).get("kino_client_id"),
         "DATA": []
     }
+    print(get_kino_config(maxlife=False).get("kino_client_id"))
+    print("non maxlife")
 
     try:
         kino_stock_balance = get_all_balance_kino_item(
@@ -648,101 +653,119 @@ def post_stock(data: KinoPostStock = None):
         # for test 
         # payloads = mock_post_stock()
         if header_maxlife:
-            payloads = header_maxlife
-            token = login(maxlife=True)['access_token']
-            print(token)
-            base_url = get_kino_config().get('kino_host')
-            url = f"{base_url}api/ids/extclient/masterpayload"
+            try:
+                payloads = header_maxlife
+                token = login(maxlife=True)['access_token']
+                print(token)
+                base_url = get_kino_config().get('kino_host')
+                url = f"{base_url}api/ids/extclient/masterpayload"
 
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {token}"
-            }
-            response = requests.post(
-                url,
-                json=header_maxlife,
-                headers=headers
-            )
-            print(response.json())
+                headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {token}"
+                }
+                response = requests.post(
+                    url,
+                    json=header_maxlife,
+                    headers=headers
+                )
+                print(response.json())
 
-            # Handle HTTP errors
-            response.raise_for_status()
-            logger.log({
-                "url": url,
-                "title": "POST_IDS_STOCK",
-                "method": "POST",
-                "status_code": response.status_code,
-                "kino_status":response.json().get("STATUSDESC",None),
-                "request": header_maxlife,
-                "response": response.json()
-            })
+                # Handle HTTP errors
+                response.raise_for_status()
+                logger.log({
+                    "url": url,
+                    "title": "POST_IDS_STOCK",
+                    "method": "POST",
+                    "status_code": response.status_code,
+                    "kino_status":response.json().get("STATUSDESC",None),
+                    "request": header_maxlife,
+                    "response": response.json()
+                })
 
-            return {
-                "status": "success",
-                "code": response.status_code,
-                "response": response.json()
-            }
+                return {
+                    "status": "success",
+                    "code": response.status_code,
+                    "response": response.json()
+                }
+            except requests.exceptions.HTTPError as http_err:
+                base_url = get_kino_config().get('kino_host')
+                url = f"{base_url}api/ids/extclient/masterpayload"
+                logger.log({
+                    "url": url,
+                    "title": "POST_IDS_STOCK",
+                    "method": "POST",
+                    "status_code": response.status_code,
+                    "kino_status":response.json().get("STATUSDESC",None),
+                    "request": payloads,
+                    "response": response.json()
+                })
+                return {
+                    "status": "http_error",
+                    "error": str(http_err),
+                    "response": response.text if 'response' in locals() else None
+                }
         if header_without_maxlife:
-            payloads = header_without_maxlife
-            token = login(maxlife=False)['access_token']
-            print(token)
-            base_url = get_kino_config().get('kino_host')
-            url = f"{base_url}api/ids/extclient/masterpayload"
+            try:
+                payloads = header_without_maxlife
+                token = login(maxlife=False)['access_token']
+                print(token)
+                base_url = get_kino_config().get('kino_host')
+                url = f"{base_url}api/ids/extclient/masterpayload"
 
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {token}"
-            }
-            response = requests.post(
-                url,
-                json=header_maxlife,
-                headers=headers
-            )
-            print(response.json())
+                headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {token}"
+                }
+                response = requests.post(
+                    url,
+                    json=header_maxlife,
+                    headers=headers
+                )
+                print(response.json())
 
-            # Handle HTTP errors
-            response.raise_for_status()
-            logger.log({
-                "url": url,
-                "title": "POST_IDS_STOCK",
-                "method": "POST",
-                "status_code": response.status_code,
-                "kino_status":response.json().get("STATUSDESC",None),
-                "request": header_maxlife,
-                "response": response.json()
-            })
+                # Handle HTTP errors
+                response.raise_for_status()
+                logger.log({
+                    "url": url,
+                    "title": "POST_IDS_STOCK",
+                    "method": "POST",
+                    "status_code": response.status_code,
+                    "kino_status":response.json().get("STATUSDESC",None),
+                    "request": header_maxlife,
+                    "response": response.json()
+                })
 
-            return {
-                "status": "success",
-                "code": response.status_code,
-                "response": response.json()
-            }
-
-    except requests.exceptions.HTTPError as http_err:
-        logger.log({
-            "url": url,
-            "title": "POST_IDS_STOCK",
-            "method": "POST",
-            "status_code": response.status_code,
-            "kino_status":response.json().get("STATUSDESC",None),
-            "request": payloads,
-            "response": response.json()
-        })
-        return {
-            "status": "http_error",
-            "error": str(http_err),
-            "response": response.text if 'response' in locals() else None
-        }
-
+                return {
+                    "status": "success",
+                    "code": response.status_code,
+                    "response": response.json()
+                }
+            except requests.exceptions.HTTPError as http_err:
+                base_url = get_kino_config().get('kino_host')
+                url = f"{base_url}api/ids/extclient/masterpayload"
+                logger.log({
+                    "url": url,
+                    "title": "POST_IDS_STOCK",
+                    "method": "POST",
+                    "status_code": response.status_code,
+                    "kino_status":response.json().get("STATUSDESC",None),
+                    "request": payloads,
+                    "response": response.json()
+                })
+                return {
+                    "status": "http_error",
+                    "error": str(http_err),
+                    "response": response.text if 'response' in locals() else None
+                }
     except Exception as e:
         logger.log({
-            "url": url,
             "title": "POST_IDS_STOCK",
             "method": "POST",
-            "status_code": response.status_code if response else None,
-            "kino_status":response.json().get("STATUSDESC",None) if response else None,
+            "status_code": None,
+            "kino_status":None,
             "request": payloads,
-            "response": response.json()
+            "response": traceback.format_exc()
         })
         return {
             "status": "error",
