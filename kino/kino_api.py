@@ -12,6 +12,7 @@ import json
 from log_handler.logs import KinoLogger
 from kino.kino_api_test import mock_data,mock_post_stock_maxlife,mock_post_stock_non_maxlife
 from fastapi.encoders import jsonable_encoder
+import pytz
 
 logger = KinoLogger("kino_api_logs")
 
@@ -100,11 +101,13 @@ def login(maxlife=False):
 
         # kalau disimpan string
         if isinstance(token_creation, str):
-            token_creation_dt = datetime.fromisoformat(token_creation)
+            token_creation_dt = datetime.strptime(
+                token_creation, "%Y-%m-%d %H:%M:%S"
+            )
         else:
             token_creation_dt = token_creation
-
-        return datetime.now() - token_creation_dt > timedelta(hours=24)
+        now = datetime.now(pytz.timezone("Asia/Jakarta")).replace(tzinfo=None)
+        return now - token_creation_dt > timedelta(hours=24)
 
     url = get_kino_config(maxlife=maxlife).get("kino_host")+'oauth/token'
     client_id = get_kino_config(maxlife=maxlife).get("kino_client_id")
@@ -127,7 +130,7 @@ def login(maxlife=False):
             response = requests.post(url, data=payload, headers=headers)
             response.raise_for_status()
             print(response.json())
-            date_now = datetime.now().date().strftime("%Y-%m-%d")
+            date_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             if maxlife:
                 update_single(response.json()['access_token'],'kino_access_token_maxlife')
                 update_single(date_now,'access_token_creation_maxlife')
