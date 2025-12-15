@@ -436,7 +436,7 @@ def create_post_invoice_payload(order_ref:str = None,start_date:str = None,end_d
         raise Exception(traceback.format_exc())
 
 def send_single_invoice(payload: json):
-    data = json.loads(payload)
+    data = payload
     token = login(maxlife=False)['access_token']
     if data['DATA'][0].get('REGION_CODE') == '1002':
         token = login(maxlife=True)['access_token']
