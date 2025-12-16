@@ -481,12 +481,12 @@ def create_post_invoice_payload(order_ref:str = None,start_date:str = None,end_d
 def send_single_invoice(payload: json):
     data = payload
     token = login(maxlife=False)['access_token']
-    if data['DATA'][0].get('REGION_CODE') == '1002':
+    if data[0]['DATA'][0].get('REGION_CODE') == '1002':
         token = login(maxlife=True)['access_token']
-        data['CLIENTID'] = get_kino_config(maxlife=True).get('kino_client_id')
+        data[0]['CLIENTID'] = get_kino_config(maxlife=True).get('kino_client_id')
         url = get_kino_config(maxlife=True).get('kino_host')+'api/ids/extclient/masterpayload'
     else:
-        data['CLIENTID'] = get_kino_config(maxlife=False).get('kino_client_id')
+        data[0]['CLIENTID'] = get_kino_config(maxlife=False).get('kino_client_id')
         url = get_kino_config(maxlife=False).get('kino_host')+'api/ids/extclient/masterpayload'
 
     # if using env
