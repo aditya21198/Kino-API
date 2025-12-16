@@ -356,41 +356,49 @@ def create_post_invoice_payload(order_ref:str = None,start_date:str = None,end_d
             calc.name,
             calc.po_no,
             calc.transaction_date,
-            calc.grand_total as grand_total_with_vat,
+            calc.grand_total AS grand_total_with_vat,
             calc.master_bundle_item,
             calc.item_code,
             calc.sub_brand,
             calc.quantity,
             calc.harga_jual,
             calc.total_amount,
-            CAST(calc.total_amount * 0.11 AS DECIMAL(20,4)) as tax_amount,
-            CAST(calc.total_amount * 1.11 AS DECIMAL(20,4)) as amount,
+            CAST(calc.total_amount * 0.11 AS DECIMAL(20,4)) AS tax_amount,
+            CAST(calc.total_amount * 1.11 AS DECIMAL(20,4)) AS amount,
             calc.is_bundle_item,
             calc.store,
             calc.channel,
             calc.price_list_rate_dbp
         FROM (
-                SELECT
-                    so.name,
-                    so.po_no,
-                    so.transaction_date,
-                    so.grand_total,
-                    COALESCE(pi.parent_item, "") as master_bundle_item,
-                    COALESCE(pi.item_code, soi.item_code) as item_code,
+            SELECT
+                so.name,
+                so.po_no,
+                so.transaction_date,
+                so.grand_total,
+                COALESCE(pi.parent_item, "") AS master_bundle_item,
+                COALESCE(pi.item_code, soi.item_code) AS item_code,
 
-                    COALESCE(pi.qty, soi.qty) - COALESCE(soi.returned_qty, 0) as quantity,
+                COALESCE(pi.qty, soi.qty) - COALESCE(soi.returned_qty, 0) AS quantity,
 
-                    CAST(COALESCE(soi.rate * pi.qty / pi_totals.total_qty, soi.rate) AS DECIMAL(20,4)) as harga_jual,
+                CAST(
+                    COALESCE(
+                        soi.rate * pi.qty / pi_totals.total_qty,
+                        soi.rate
+                    ) AS DECIMAL(20,4)
+                ) AS harga_jual,
 
-                    CAST(
-                            COALESCE((soi.rate / pi_totals.total_qty) * pi.qty, soi.rate * soi.qty)
-                            AS DECIMAL(20,4)
-                        )
-                        * (
-                            (COALESCE(pi.qty, soi.qty) - COALESCE(soi.returned_qty, 0))
-                            / COALESCE(pi.qty, soi.qty)
-                        ) as total_amount,
-                    (
+                CAST(
+                    COALESCE(
+                        (soi.rate / pi_totals.total_qty) * pi.qty,
+                        soi.rate * soi.qty
+                    ) AS DECIMAL(20,4)
+                )
+                * (
+                    (COALESCE(pi.qty, soi.qty) - COALESCE(soi.returned_qty, 0))
+                    / COALESCE(pi.qty, soi.qty)
+                ) AS total_amount,
+
+                (
                     SELECT ip.price_list_rate
                     FROM `tabItem Price` ip
                     WHERE ip.item_code = COALESCE(pi.item_code, soi.item_code)
@@ -398,51 +406,57 @@ def create_post_invoice_payload(order_ref:str = None,start_date:str = None,end_d
                     AND ip.valid_from <= so.transaction_date
                     ORDER BY ip.valid_from DESC
                     LIMIT 1
-                    ) AS price_list_rate_dbp,
+                ) AS price_list_rate_dbp,
 
-                    CASE WHEN pi.item_code IS NOT NULL THEN 1 ELSE 0 END as is_bundle_item,
+                CASE
+                    WHEN pi.item_code IS NOT NULL THEN 1
+                    ELSE 0
+                END AS is_bundle_item,
 
-                    JSON_UNQUOTE(JSON_EXTRACT(api_log.response, '$.data.price[0].store')) AS store,
-                    JSON_UNQUOTE(JSON_EXTRACT(api_log.response, '$.data.price[0].channel')) AS channel,
+                JSON_UNQUOTE(JSON_EXTRACT(api_log.response, '$.data.price[0].store')) AS store,
+                JSON_UNQUOTE(JSON_EXTRACT(api_log.response, '$.data.price[0].channel')) AS channel,
 
-                    soi.idx,
-                    it.sub_brand,
-                    COALESCE(pi.idx, 0) as pi_idx
+                soi.idx,
+                it.sub_brand,
+                COALESCE(pi.idx, 0) AS pi_idx
 
-                FROM aladdin.`tabSales Order Item` soi
-                    INNER JOIN aladdin.`tabSales Order` so
-                        ON soi.parent = so.name
+            FROM aladdin.`tabSales Order Item` soi
+            INNER JOIN aladdin.`tabSales Order` so
+                ON soi.parent = so.name
 
-                    LEFT JOIN aladdin.`tabPacked Item` pi
-                        ON pi.parent = so.name AND pi.parent_item = soi.item_code
+            LEFT JOIN aladdin.`tabPacked Item` pi
+                ON pi.parent = so.name
+                AND pi.parent_item = soi.item_code
 
-                    LEFT JOIN aladdin.`tabItem` it
-                        ON pi.item_code = it.item_code
+            LEFT JOIN aladdin.`tabItem` it
+                ON it.item_code = COALESCE(pi.item_code, soi.item_code)
 
-                    LEFT JOIN (
-                        SELECT parent, parent_item, SUM(qty) as total_qty
-                        FROM aladdin.`tabPacked Item`
-                        GROUP BY parent, parent_item
-                    ) pi_totals
-                        ON pi_totals.parent = so.name
-                        AND pi_totals.parent_item = soi.item_code
+            LEFT JOIN (
+                SELECT
+                    parent,
+                    parent_item,
+                    SUM(qty) AS total_qty
+                FROM aladdin.`tabPacked Item`
+                GROUP BY parent, parent_item
+            ) pi_totals
+                ON pi_totals.parent = so.name
+                AND pi_totals.parent_item = soi.item_code
 
-                    LEFT JOIN logs.erpnext_arbi_titipaja_api_log api_log
-                        ON api_log.po_no = so.po_no
-                        AND api_log.title = 'Price Detail'
-                        AND api_log.created_at = (
-                            SELECT MAX(created_at)
-                            FROM logs.erpnext_arbi_titipaja_api_log l2
-                            WHERE l2.po_no = so.po_no
-                            AND l2.title = 'Price Detail'
-                        )
+            LEFT JOIN logs.erpnext_arbi_titipaja_api_log api_log
+                ON api_log.po_no = so.po_no
+                AND api_log.title = 'Price Detail'
+                AND api_log.created_at = (
+                    SELECT MAX(created_at)
+                    FROM logs.erpnext_arbi_titipaja_api_log l2
+                    WHERE l2.po_no = so.po_no
+                    AND l2.title = 'Price Detail'
+                )
 
-                WHERE soi.brand = 'Kino'
-                AND so.docstatus = 1
-                AND so.transaction_date >= %s
-                AND so.transaction_date <= %s
-            ) calc
-
+            WHERE soi.brand = 'Kino'
+            AND so.docstatus = 1
+            AND so.transaction_date >= %s
+            AND so.transaction_date <= %s
+        ) calc
         WHERE calc.quantity != 0
         {condition_sql}
         ORDER BY calc.po_no, calc.name, calc.idx, calc.pi_idx;
@@ -787,7 +801,7 @@ def post_stock(data: KinoPostStock = None):
 # test only
 if __name__ == '__main__':
     try:
-        print(create_stock_payload())
+        print(create_post_invoice_payload(order_ref="SO-ARB-25-00134351",start_date="2025-12-15",end_date="2025-12-15"))
     except Exception as e:
         print(f"{datetime.now()} : Error in main function", flush=True)
         print(traceback.format_exc())
