@@ -501,10 +501,10 @@ def send_single_invoice(payload: json):
         log_data = {
             "url": url,
             "title": "SEND_SINGLE_INVOICE",
-            "order_ref":payload['DATA'][0]['ORDER_REF'],
+            "order_ref":data[0]['DATA'][0]['ORDER_REF'],
             "method": "POST",
             "status_code": response.status_code if response else None,
-            "request": payload,
+            "request": data,
             "kino_status":response.json().get("STATUSDESC", None),
             "response": response.text if response else None
         }
@@ -523,11 +523,11 @@ def send_single_invoice(payload: json):
         logger.log({
             "url": url,
             "title": "SEND_SINGLE_INVOICE_ERROR",
-            "order_ref":payload['DATA'][0]['ORDER_REF'],
+            "order_ref":data[0]['DATA'][0]['ORDER_REF'],
             "method": "POST",
             "status_code": 500,
             "kino_status":response.json().get("STATUSDESC",None),
-            "request": payload,
+            "request": data,
             "response": e
         })
         print("Error sending payload:", err_text)
