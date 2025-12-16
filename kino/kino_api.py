@@ -348,10 +348,16 @@ def build_payload(result: list):
 
 def create_post_invoice_payload(order_ref:str = None,start_date:str = None,end_date:str = None):
     conditions = []
+    condittion_start_date_end_date = []
     if order_ref:
         conditions.append(f"AND calc.name = '{order_ref}'")
+    
+    if start_date and end_date:
+        condittion_start_date_end_date.append(f"AND so.transaction_date >= '{start_date}'")
+        condittion_start_date_end_date.append(f"AND so.transaction_date <= '{end_date}'")
 
     condition_sql = " ".join(conditions) if conditions else ""
+    condition_transaction_date_sql = " ".join(condittion_start_date_end_date) if condittion_start_date_end_date else ""
     query = f"""
         SELECT
             calc.name,
@@ -456,20 +462,19 @@ def create_post_invoice_payload(order_ref:str = None,start_date:str = None,end_d
 
             WHERE soi.brand = 'Kino'
             AND so.docstatus = 1
-            AND so.transaction_date >= %s
-            AND so.transaction_date <= %s
+            {condition_transaction_date_sql}
         ) calc
         WHERE calc.quantity != 0
         {condition_sql}
         ORDER BY calc.po_no, calc.name, calc.idx, calc.pi_idx;
     """
     try:
-        result = execute_query_fetch(query=query,params=(start_date,end_date))
-        payloads = build_payload(result=result)
+        result = execute_query_fetch(query=query)
+        # payloads = build_payload(result=result)
         # for test
         # payloads = mock_data()
 
-        return payloads
+        return result
     except Exception as error:
         raise Exception(traceback.format_exc())
 
@@ -528,6 +533,14 @@ def send_single_invoice(payload: json):
         print("Error sending payload:", err_text)
         return {"status": "error", "payload": payload, "response": str(e)}
 
+def get_unique_so_ref(payloads:list):
+    so_refs = set()
+    for payload in payloads:
+        so_ref = payload.get('name')
+        if so_ref:
+            so_refs.add(so_ref)
+    return list(so_refs)
+
 
 def ids_post_invoice(data_dict:dict):
     order_ref = None
@@ -537,39 +550,29 @@ def ids_post_invoice(data_dict:dict):
         order_ref = data_dict.get('ORDER_REF',None)
         start_date = data_dict.get('START_DATE',None)
         end_date = data_dict.get('END_DATE',None)
-    try:
-        payloads = create_post_invoice_payload(order_ref=order_ref,start_date=start_date,end_date=end_date)
-        results = []
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            # max_workers=10 → 10 thread paralel
-            future_to_payload = {
-                executor.submit(send_single_invoice,payload): json.dumps(payload)
-                for payload in payloads
-            }
-
-            for future in as_completed(future_to_payload):
-                results.append(future.result())
-        # debug
-        # print(results)
-        # print('result\n')
-        return results
-
-
-    except Exception as error:
-        print(traceback.format_exc(),error)
-        err_text = traceback.format_exc()
-        logger.log({
-            "url": None,
-            "title": "INVOICE_ERROR",
-            "order_ref":None,
-            "method": "POST",
-            "status_code": 500,
-            "kino_status":None,
-            "request": None,
-            "response": err_text
-        })
-        
-        return None
+        raw_payloads = create_post_invoice_payload(order_ref=order_ref,start_date=start_date,end_date=end_date)
+        unique_so_ref = get_unique_so_ref(payloads=raw_payloads)
+        for so_ref in unique_so_ref:
+            try:
+                single_payloads = []
+                for payload in raw_payloads:
+                    if payload.get('name') == so_ref:
+                        single_payloads.append(payload)
+                payload = build_payload(single_payloads)
+                send_single_invoice(payload)
+            except Exception as error:
+                print(traceback.format_exc(),error)
+                err_text = traceback.format_exc()
+                logger.log({
+                    "url": None,
+                    "title": "INVOICE_ERROR",
+                    "order_ref":None,
+                    "method": "POST",
+                    "status_code": 500,
+                    "kino_status":None,
+                    "request": None,
+                    "response": err_text
+                })
 
 def get_all_balance_kino_item(item_code: str = None, warehouse: str = None):
     conditions = """
@@ -803,7 +806,12 @@ def post_stock(data: KinoPostStock = None):
 # test only
 if __name__ == '__main__':
     try:
-        print(create_post_invoice_payload(start_date="2025-12-15",end_date="2025-12-15"))
+        data = {
+            "ORDER_REF":"SO-ARB-25-00134351",
+            "START_DATE":"2025-12-15",
+            "END_DATE":"2025-12-15"
+        }
+        print(ids_post_invoice(data))
     except Exception as e:
         print(f"{datetime.now()} : Error in main function", flush=True)
         print(traceback.format_exc())
