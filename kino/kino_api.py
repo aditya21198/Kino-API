@@ -496,7 +496,7 @@ def send_single_invoice(payload: json):
         "Authorization": f"Bearer {token}"
     }
     try:
-        response = requests.post(url, json=data, headers=headers)
+        response = requests.post(url, json=data[0], headers=headers)
 
         log_data = {
             "url": url,
