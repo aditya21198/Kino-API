@@ -213,7 +213,7 @@ def grouped_data_by_order_id(query_result:list):
                 # get Region Code
                 sub_brand = row.get("sub_brand")
                 if sub_brand:
-                    if sub_brand.lower() == "maxlife":
+                    if sub_brand.lower() in ["maxlife","perro"]:
                         region_code = "1002"
                     else:
                         region_code = "1000"
@@ -224,12 +224,13 @@ def grouped_data_by_order_id(query_result:list):
                 store = row.get('store',None)
                 channel = row.get('channel',None)
 
+                print(row.get('name',None))
+                print('so name')
+
                 cust_code1 = get_customer_code(store=store,channel=channel,region_id=region_code)[0]
                 cust_code2 = get_customer_code(store=store,channel=channel,region_id=region_code)[1]
                 entity_code = get_customer_code(store=store,channel=channel,region_id=region_code)[2]
                 branch_code = get_customer_code(store=store,channel=channel,region_id=region_code)[3]
-                print(get_customer_code(store=store,channel=channel,region_id=region_code))
-                print("customer\n")
                 salesman_code = get_salesman_code(region_id=region_code)['gms_salesman_id']
 
                 transaction_date = row.get("transaction_date").isoformat() if row.get("transaction_date",None) else None
@@ -802,7 +803,7 @@ def post_stock(data: KinoPostStock = None):
 # test only
 if __name__ == '__main__':
     try:
-        print(create_stock_payload())
+        print(create_post_invoice_payload(start_date="2025-12-15",end_date="2025-12-15"))
     except Exception as e:
         print(f"{datetime.now()} : Error in main function", flush=True)
         print(traceback.format_exc())
