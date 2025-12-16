@@ -566,7 +566,7 @@ def ids_post_invoice(data_dict:dict):
                 logger.log({
                     "url": None,
                     "title": "INVOICE_ERROR",
-                    "order_ref":None,
+                    "order_ref":so_ref,
                     "method": "POST",
                     "status_code": 500,
                     "kino_status":None,
