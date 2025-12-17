@@ -708,6 +708,7 @@ def safe_response_json(response):
         return None
 
 def post_stock(data: KinoPostStock = None):
+    print("run post stock\n")
     try:
         item_code = None
         warehouse = None
@@ -807,7 +808,7 @@ def post_stock(data: KinoPostStock = None):
             "method": "POST",
             "status_code": None,
             "kino_status":None,
-            "request": payloads,
+            "request": None,
             "response": traceback.format_exc()
         })
         return {
