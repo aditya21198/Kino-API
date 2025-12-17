@@ -4,31 +4,8 @@ from fastapi import FastAPI, BackgroundTasks
 from models import ManualPostInvoiceKino,KinoPostStock
 from services import end_of_month_job,end_of_the_day_invoice_job
 from kino.kino_api import ids_post_invoice,post_stock
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.cron import CronTrigger
 
 app = FastAPI()
-
-scheduler = AsyncIOScheduler()
-scheduler.start()
-
-
-# CRON JOB: Jalan tiap hari jam 2 pagi
-scheduler.add_job(
-    end_of_the_day_invoice_job,
-    CronTrigger(hour=2, minute=0),
-    id="daily_job",
-    replace_existing=True
-)
-
-# CRON JOB: Jalan tiap hari jam 1 pagi
-scheduler.add_job(
-    post_stock,
-    CronTrigger(hour=1, minute=0),
-    id="daily_post_stock",
-    replace_existing=True
-)
-
 
 @app.post("/submit-order")
 async def submit_order(payload: ManualPostInvoiceKino, background_tasks: BackgroundTasks):
