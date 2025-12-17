@@ -504,7 +504,7 @@ def send_single_invoice(payload: json):
             "order_ref":data[0]['DATA'][0]['ORDER_REF'],
             "method": "POST",
             "status_code": response.status_code if response else None,
-            "request": data,
+            "request": data[0],
             "kino_status":response.json().get("STATUSDESC", None),
             "response": response.text if response else None
         }
@@ -527,7 +527,7 @@ def send_single_invoice(payload: json):
             "method": "POST",
             "status_code": 500,
             "kino_status":response.json().get("STATUSDESC",None),
-            "request": data,
+            "request": data[0],
             "response": e
         })
         print("Error sending payload:", err_text)
