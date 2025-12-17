@@ -279,8 +279,8 @@ def group_details_by_order_id(query_result: list):
                 'DISC_ID1': "",
                 'DISC_PRINCIPAL_PCT1': 0.0,
                 'DISC_PRINCIPAL_VAL1': 0.0,
-                'DISC_DIST_PCT1': "1",
-                'DISC_DIST_VAL1': "",
+                'DISC_DIST_PCT1': 0.0,
+                'DISC_DIST_VAL1': 0.0,
 
                 'DISC_ID2': "",
                 'DISC_PRINCIPAL_PCT2': 0.0,
