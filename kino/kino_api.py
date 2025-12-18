@@ -729,6 +729,7 @@ def post_stock(data: KinoPostStock = None):
                 payloads = header_maxlife
                 token = login(maxlife=True)['access_token']
                 print(token)
+                print("token maxlife\n")
                 base_url = get_kino_config().get('kino_host')
                 url = f"{base_url}api/ids/extclient/masterpayload"
 
@@ -736,6 +737,7 @@ def post_stock(data: KinoPostStock = None):
                     "Content-Type": "application/json",
                     "Authorization": f"Bearer {token}"
                 }
+                print("jalanin request\n")
                 response = requests.post(
                     url,
                     json=header_maxlife,
@@ -771,6 +773,8 @@ def post_stock(data: KinoPostStock = None):
             try:
                 payloads = header_without_maxlife
                 token = login(maxlife=False)['access_token']
+                print(token)
+                print("token non maxlife\n")
                 base_url = get_kino_config().get('kino_host')
                 url = f"{base_url}api/ids/extclient/masterpayload"
 
@@ -778,6 +782,7 @@ def post_stock(data: KinoPostStock = None):
                     "Content-Type": "application/json",
                     "Authorization": f"Bearer {token}"
                 }
+                print("jalanin request\n")
                 response = requests.post(
                     url,
                     json=header_without_maxlife,
