@@ -724,7 +724,7 @@ def post_stock(data: KinoPostStock = None):
         # header_without_maxlife = mock_post_stock_non_maxlife()
         if header_maxlife.get('DATA'):
             print("post maxlife\n")
-            print(header_maxlife)
+            print(len(header_maxlife))
             try:
                 payloads = header_maxlife
                 token = login(maxlife=True)['access_token']
@@ -769,7 +769,7 @@ def post_stock(data: KinoPostStock = None):
                 })
         if header_without_maxlife.get('DATA'):
             print("post non maxlife\n")
-            print(header_without_maxlife)
+            print(len(header_without_maxlife))
             try:
                 payloads = header_without_maxlife
                 token = login(maxlife=False)['access_token']
