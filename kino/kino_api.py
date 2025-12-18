@@ -728,51 +728,51 @@ def post_stock(data: KinoPostStock = None):
         # for test only
         # header_maxlife= mock_post_stock_maxlife()
         # header_without_maxlife = mock_post_stock_non_maxlife()
-        if header_maxlife.get('DATA'):
-            print("post maxlife\n")
-            print(len(header_maxlife))
-            try:
-                payloads = header_maxlife
-                token = login(maxlife=True)['access_token']
-                print("token maxlife ok\n")
-                base_url = get_kino_config().get('kino_host')
-                url = f"{base_url}api/ids/extclient/masterpayload"
+        # if header_maxlife.get('DATA'):
+        #     print("post maxlife\n")
+        #     print(len(header_maxlife))
+        #     try:
+        #         payloads = header_maxlife
+        #         token = login(maxlife=True)['access_token']
+        #         print("token maxlife ok\n")
+        #         base_url = get_kino_config().get('kino_host')
+        #         url = f"{base_url}api/ids/extclient/masterpayload"
 
-                headers = {
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {token}"
-                }
-                print("jalanin request\n")
-                response = requests.post(
-                    url,
-                    json=header_maxlife,
-                    headers=headers
-                )
-                full_response_text = json.dumps(response.text) or ""
-                resp_json = safe_response_json(response)
-                # Handle HTTP errors
-                response.raise_for_status()
-                logger.log({
-                    "url": url,
-                    "title": "POST_IDS_STOCK",
-                    "method": "POST",
-                    "status_code": response.status_code,
-                    "kino_status":resp_json.get("STATUSDESC") if resp_json else full_response_text[-10000],
-                    "request": header_maxlife,
-                    "response": full_response_text[-10000]
-                })
-            except requests.exceptions.HTTPError as http_err:
-                base_url = get_kino_config().get('kino_host')
-                url = f"{base_url}api/ids/extclient/masterpayload"
-                logger.log({
-                    "url": url,
-                    "title": "POST_IDS_STOCK",
-                    "method": "POST",
-                    "status_code": response.status_code,
-                    "kino_status":resp_json.get("STATUSDESC") if resp_json else full_response_text[-10000],
-                    "request": header_maxlife,
-                    "response": full_response_text[-10000]
-                })
+        #         headers = {
+        #             "Content-Type": "application/json",
+        #             "Authorization": f"Bearer {token}"
+        #         }
+        #         print("jalanin request\n")
+        #         response = requests.post(
+        #             url,
+        #             json=header_maxlife,
+        #             headers=headers
+        #         )
+        #         full_response_text = json.dumps(response.text) or ""
+        #         resp_json = safe_response_json(response)
+        #         # Handle HTTP errors
+        #         response.raise_for_status()
+        #         logger.log({
+        #             "url": url,
+        #             "title": "POST_IDS_STOCK",
+        #             "method": "POST",
+        #             "status_code": response.status_code,
+        #             "kino_status":resp_json.get("STATUSDESC") if resp_json else full_response_text[-10000],
+        #             "request": header_maxlife,
+        #             "response": full_response_text[-10000]
+        #         })
+        #     except requests.exceptions.HTTPError as http_err:
+        #         base_url = get_kino_config().get('kino_host')
+        #         url = f"{base_url}api/ids/extclient/masterpayload"
+        #         logger.log({
+        #             "url": url,
+        #             "title": "POST_IDS_STOCK",
+        #             "method": "POST",
+        #             "status_code": response.status_code,
+        #             "kino_status":resp_json.get("STATUSDESC") if resp_json else full_response_text[-10000],
+        #             "request": header_maxlife,
+        #             "response": full_response_text[-10000]
+        #         })
         if header_without_maxlife.get('DATA'):
             print("post non maxlife\n")
             print(len(header_without_maxlife))
