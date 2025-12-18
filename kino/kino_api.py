@@ -793,6 +793,7 @@ def post_stock(data: KinoPostStock = None):
                     json=header_without_maxlife,
                     headers=headers
                 )
+                full_response_text = json.dumps(response.text) or ""
 
                 resp_json = safe_response_json(response)
                 # Handle HTTP errors
