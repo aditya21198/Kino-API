@@ -652,6 +652,8 @@ def create_stock_payload(item_code: str = None, warehouse: str = None):
             item_code=item_code,
             warehouse=warehouse
         )
+        print(kino_stock_balance)
+        print("kino stock balance\n")
 
         warehouse_mapping = get_warehouse_mapping()
 
@@ -679,11 +681,12 @@ def create_stock_payload(item_code: str = None, warehouse: str = None):
                 "WHLOC2": whloc2,
                 "QTY": int(kino_stock.get("balance"))
             }
-
-            if kino_stock.get("sub_brand") == "MAXLIFE":
-                maxlife_detail.append(detail_row)
-            else:
+            if kino_stock.get("sub_brand").lower() not in ['maxlife','perro']:
+                print(kino_stock.get("sub_brand"))
+                print("non maxlife detail\n")
                 non_maxlife_detail.append(detail_row)
+            if kino_stock.get("sub_brand").lower() in ['maxlife','perro']:
+                maxlife_detail.append(detail_row)
 
         if maxlife_detail:
             header_maxlife["DATA"].append({
@@ -694,7 +697,7 @@ def create_stock_payload(item_code: str = None, warehouse: str = None):
             header_without_maxlife["DATA"].append({
                 "DETAIL": non_maxlife_detail
             })
-
+        
         return header_maxlife, header_without_maxlife
 
     except Exception:
@@ -719,7 +722,9 @@ def post_stock(data: KinoPostStock = None):
         # for test only
         # header_maxlife= mock_post_stock_maxlife()
         # header_without_maxlife = mock_post_stock_non_maxlife()
-        if header_maxlife:
+        if header_maxlife.get('DATA'):
+            print("post maxlife\n")
+            print(header_maxlife)
             try:
                 payloads = header_maxlife
                 token = login(maxlife=True)['access_token']
@@ -760,11 +765,12 @@ def post_stock(data: KinoPostStock = None):
                     "request": header_maxlife,
                     "response": resp_json if resp_json else response.text
                 })
-        if header_without_maxlife:
+        if header_without_maxlife.get('DATA'):
+            print("post non maxlife\n")
+            print(header_without_maxlife)
             try:
                 payloads = header_without_maxlife
                 token = login(maxlife=False)['access_token']
-                print(token)
                 base_url = get_kino_config().get('kino_host')
                 url = f"{base_url}api/ids/extclient/masterpayload"
 
@@ -811,22 +817,16 @@ def post_stock(data: KinoPostStock = None):
             "request": None,
             "response": traceback.format_exc()
         })
-        return {
-            "status": "error",
-            "error": str(e)
-        }
-
     
 
 # test only
 if __name__ == '__main__':
     try:
-        data = {
-            "ORDER_REF":"SO-ARB-25-00134351",
-            "START_DATE":"2025-12-15",
-            "END_DATE":"2025-12-15"
-        }
-        print(ids_post_invoice(data))
+        header_maxlife, header_without_maxlife = create_stock_payload()
+        print("Maxlife Payload:")
+        print(header_maxlife)
+        print("\nNon-Maxlife Payload:")
+        print(header_without_maxlife)
     except Exception as e:
         print(f"{datetime.now()} : Error in main function", flush=True)
         print(traceback.format_exc())
