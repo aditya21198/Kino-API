@@ -796,6 +796,7 @@ def post_stock(data: KinoPostStock = None):
                 full_response_text = json.dumps(response.text) or ""
 
                 resp_json = safe_response_json(response)
+                print(response.text)
                 # Handle HTTP errors
                 response.raise_for_status()
                 logger.log({
