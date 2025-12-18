@@ -13,6 +13,7 @@ from log_handler.logs import KinoLogger
 from kino.kino_api_test import mock_data,mock_post_stock_maxlife,mock_post_stock_non_maxlife
 from fastapi.encoders import jsonable_encoder
 import pytz
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 logger = KinoLogger("kino_api_logs")
 
@@ -547,49 +548,72 @@ def get_unique_so_ref(payloads:list):
             so_refs.add(so_ref)
     return list(so_refs)
 
-
-def ids_post_invoice(data_dict:dict):
+def ids_post_invoice(data_dict: dict):
     order_ref = None
     start_date = None
     end_date = None
+
     try:
         if data_dict:
-            order_ref = data_dict.get('ORDER_REF',None)
-            start_date = data_dict.get('START_DATE',None)
-            end_date = data_dict.get('END_DATE',None)
-            raw_payloads = create_post_invoice_payload(order_ref=order_ref,start_date=start_date,end_date=end_date)
-            unique_so_ref = get_unique_so_ref(payloads=raw_payloads)
-            for so_ref in unique_so_ref:
+            order_ref = data_dict.get('ORDER_REF')
+            start_date = data_dict.get('START_DATE')
+            end_date = data_dict.get('END_DATE')
+
+        raw_payloads = create_post_invoice_payload(
+            order_ref=order_ref,
+            start_date=start_date,
+            end_date=end_date
+        )
+
+        grouped = {}
+        for row in raw_payloads:
+            so_ref = row.get('name')
+            if not so_ref:
+                continue
+            grouped.setdefault(so_ref, []).append(row)
+
+        def worker(so_ref, rows):
+            try:
+                payload = build_payload(rows)
+                send_single_invoice(payload)
+                return {"so_ref": so_ref, "status": "success"}
+            except Exception:
+                err_text = traceback.format_exc()
+                logger.log({
+                    "url": None,
+                    "title": "INVOICE_ERROR",
+                    "order_ref": so_ref,
+                    "method": "POST",
+                    "status_code": 500,
+                    "kino_status": None,
+                    "request": None,
+                    "response": err_text
+                })
+                return {"so_ref": so_ref, "status": "failed"}
+
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = [
+                executor.submit(worker, so_ref, rows)
+                for so_ref, rows in grouped.items()
+            ]
+
+            for future in as_completed(futures):
                 try:
-                    single_payloads = []
-                    for payload in raw_payloads:
-                        if payload.get('name') == so_ref:
-                            single_payloads.append(payload)
-                    payload = build_payload(single_payloads)
-                    send_single_invoice(payload)
-                except Exception as error:
-                    print(traceback.format_exc(),error)
-                    err_text = traceback.format_exc()
-                    logger.log({
-                        "url": None,
-                        "title": "INVOICE_ERROR",
-                        "order_ref":so_ref,
-                        "method": "POST",
-                        "status_code": 500,
-                        "kino_status":None,
-                        "request": None,
-                        "response": err_text
-                    })
-    except Exception as error:
-        print(traceback.format_exc(),error)
+                    result = future.result()
+                    print(f"SO {result['so_ref']} → {result['status']}")
+                except Exception:
+                    print(traceback.format_exc())
+
+    except Exception:
         err_text = traceback.format_exc()
+        print(err_text)
         logger.log({
             "url": None,
             "title": "INVOICE_ERROR",
-            "order_ref":None,
+            "order_ref": None,
             "method": "POST",
             "status_code": 500,
-            "kino_status":None,
+            "kino_status": None,
             "request": None,
             "response": err_text
         })
