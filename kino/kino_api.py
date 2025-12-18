@@ -109,6 +109,8 @@ def login(maxlife=False):
         now = datetime.now(pytz.timezone("Asia/Jakarta")).replace(tzinfo=None)
         return now - token_creation_dt > timedelta(hours=24)
 
+    print(f"login function called maxlife={maxlife}\n")
+
     url = get_kino_config(maxlife=maxlife).get("kino_host")+'oauth/token'
     client_id = get_kino_config(maxlife=maxlife).get("kino_client_id")
     client_secret = get_kino_config(maxlife=maxlife).get("kino_client_secret")
@@ -125,9 +127,10 @@ def login(maxlife=False):
         headers = {
             "Content-Type": "application/x-www-form-urlencoded"
         }
+        print(f"payload {payload}")
 
         try:
-            response = requests.post(url, data=payload, headers=headers)
+            response = requests.post(url, data=payload, headers=headers,timeout=60)
             response.raise_for_status()
             print(response.json())
             date_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -728,8 +731,7 @@ def post_stock(data: KinoPostStock = None):
             try:
                 payloads = header_maxlife
                 token = login(maxlife=True)['access_token']
-                print(token)
-                print("token maxlife\n")
+                print("token maxlife ok\n")
                 base_url = get_kino_config().get('kino_host')
                 url = f"{base_url}api/ids/extclient/masterpayload"
 
@@ -773,8 +775,7 @@ def post_stock(data: KinoPostStock = None):
             try:
                 payloads = header_without_maxlife
                 token = login(maxlife=False)['access_token']
-                print(token)
-                print("token non maxlife\n")
+                print("token non maxlife ok\n")
                 base_url = get_kino_config().get('kino_host')
                 url = f"{base_url}api/ids/extclient/masterpayload"
 
