@@ -598,6 +598,7 @@ def get_all_balance_kino_item(item_code: str = None, warehouse: str = None):
     conditions = """
         WHERE it.brand = 'KINO'
         AND sle.docstatus = 1
+        AND sle.item_code != 'DUMMY-OVALEMIC'
     """
 
     params = []
