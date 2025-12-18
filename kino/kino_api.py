@@ -142,8 +142,11 @@ def login(maxlife=False):
                 update_single(date_now,'access_token_creation')
             return response.json()
         except requests.exceptions.RequestException as e:
-            print("Login API Error:", str(e))
-            print("Response text:", getattr(e.response, "text", ""))
+            print("Login API Error:", str(e),flush=True)
+            print("Response text:", getattr(e.response, "text", ""),flush=True)
+            return None
+        except Exception as e:
+            print("Unexpected Error during login:", str(e),flush=True)
             return None
     else:
         return {
