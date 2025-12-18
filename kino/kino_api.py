@@ -748,6 +748,7 @@ def post_stock(data: KinoPostStock = None):
                     json=header_maxlife,
                     headers=headers
                 )
+                full_response_text = json.dumps(response.text) or ""
                 resp_json = safe_response_json(response)
                 # Handle HTTP errors
                 response.raise_for_status()
@@ -756,9 +757,9 @@ def post_stock(data: KinoPostStock = None):
                     "title": "POST_IDS_STOCK",
                     "method": "POST",
                     "status_code": response.status_code,
-                    "kino_status":resp_json.get("STATUSDESC") if resp_json else response.text,
+                    "kino_status":resp_json.get("STATUSDESC") if resp_json else full_response_text[-10000],
                     "request": header_maxlife,
-                    "response": resp_json if resp_json else response.text
+                    "response": full_response_text[-10000]
                 })
             except requests.exceptions.HTTPError as http_err:
                 base_url = get_kino_config().get('kino_host')
@@ -768,9 +769,9 @@ def post_stock(data: KinoPostStock = None):
                     "title": "POST_IDS_STOCK",
                     "method": "POST",
                     "status_code": response.status_code,
-                    "kino_status":resp_json.get("STATUSDESC") if resp_json else response.text,
+                    "kino_status":resp_json.get("STATUSDESC") if resp_json else full_response_text[-10000],
                     "request": header_maxlife,
-                    "response": resp_json if resp_json else response.text
+                    "response": full_response_text[-10000]
                 })
         if header_without_maxlife.get('DATA'):
             print("post non maxlife\n")
@@ -801,9 +802,9 @@ def post_stock(data: KinoPostStock = None):
                     "title": "POST_IDS_STOCK",
                     "method": "POST",
                     "status_code": response.status_code,
-                    "kino_status":resp_json.get("STATUSDESC") if resp_json else response.text,
+                    "kino_status":resp_json.get("STATUSDESC") if resp_json else full_response_text[-10000],
                     "request": header_without_maxlife,
-                    "response": resp_json if resp_json else response.text
+                    "response": full_response_text[-10000]
                 })
             except requests.exceptions.HTTPError as http_err:
                 base_url = get_kino_config().get('kino_host')
@@ -813,9 +814,9 @@ def post_stock(data: KinoPostStock = None):
                     "title": "POST_IDS_STOCK",
                     "method": "POST",
                     "status_code": response.status_code,
-                    "kino_status":resp_json.get("STATUSDESC") if resp_json else response.text,
+                    "kino_status":resp_json.get("STATUSDESC") if resp_json else full_response_text[-10000],
                     "request": header_without_maxlife,
-                    "response": resp_json if resp_json else response.text
+                    "response": full_response_text[-10000]
                 })
     except Exception as e:
         logger.log({
