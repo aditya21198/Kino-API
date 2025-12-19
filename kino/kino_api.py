@@ -117,6 +117,7 @@ def login(maxlife=False):
     client_token = get_kino_config(maxlife=maxlife).get("kino_access_token")
     client_token_ceration = get_kino_config(maxlife=maxlife).get("kino_access_token_creation")
     if not client_token or token_expired(client_token_ceration):
+        print("generate new token True\n")
         payload = {
             "grant_type": "client_credentials",
             "client_id": client_id,
@@ -149,6 +150,7 @@ def login(maxlife=False):
             print("Unexpected Error during login:", str(e),flush=True)
             return None
     else:
+        print("generate new token False\n")
         return {
             "access_token": client_token
         }
@@ -319,7 +321,7 @@ def group_details_by_order_id(query_result: list):
                 'DISC_DIST_VAL6': 0.0,
 
                 'TAX_AMT': row.get('tax_amount', 0.0),
-                'NET': row.get('total_amount', 0.0),
+                'NET': row.get('amount', 0.0),
                 'DISC_TOTAL': 0.0
             })
         return grouped_detail
