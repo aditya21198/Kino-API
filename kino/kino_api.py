@@ -488,12 +488,14 @@ def create_post_invoice_payload(order_ref:str = None,start_date:str = None,end_d
 
 def send_single_invoice(payload: json):
     data = payload
-    token = login(maxlife=False)['access_token']
     if data[0]['DATA'][0].get('REGION_CODE') == '1002':
         token = login(maxlife=True)['access_token']
+        print(token)
         data[0]['CLIENTID'] = get_kino_config(maxlife=True).get('kino_client_id')
         url = get_kino_config(maxlife=True).get('kino_host')+'api/ids/extclient/masterpayload'
     else:
+        token = login(maxlife=False)['access_token']
+        print(token)
         data[0]['CLIENTID'] = get_kino_config(maxlife=False).get('kino_client_id')
         url = get_kino_config(maxlife=False).get('kino_host')+'api/ids/extclient/masterpayload'
 
@@ -559,29 +561,55 @@ def ids_post_invoice(data_dict:dict):
             order_ref = data_dict.get('ORDER_REF',None)
             start_date = data_dict.get('START_DATE',None)
             end_date = data_dict.get('END_DATE',None)
-            raw_payloads = create_post_invoice_payload(order_ref=order_ref,start_date=start_date,end_date=end_date)
-            unique_so_ref = get_unique_so_ref(payloads=raw_payloads)
-            for so_ref in unique_so_ref:
-                try:
-                    single_payloads = []
-                    for payload in raw_payloads:
-                        if payload.get('name') == so_ref:
-                            single_payloads.append(payload)
-                    payload = build_payload(single_payloads)
-                    send_single_invoice(payload)
-                except Exception as error:
-                    print(traceback.format_exc(),error)
-                    err_text = traceback.format_exc()
-                    logger.log({
-                        "url": None,
-                        "title": "INVOICE_ERROR",
-                        "order_ref":so_ref,
-                        "method": "POST",
-                        "status_code": 500,
-                        "kino_status":None,
-                        "request": None,
-                        "response": err_text
-                    })
+            if order_ref:
+                for order in order_ref:
+                    raw_payloads = create_post_invoice_payload(order_ref=order,start_date=start_date,end_date=end_date)
+                    unique_so_ref = get_unique_so_ref(payloads=raw_payloads)
+                    for so_ref in unique_so_ref:
+                        try:
+                            single_payloads = []
+                            for payload in raw_payloads:
+                                if payload.get('name') == so_ref:
+                                    single_payloads.append(payload)
+                            payload = build_payload(single_payloads)
+                            send_single_invoice(payload)
+                        except Exception as error:
+                            print(traceback.format_exc(),error)
+                            err_text = traceback.format_exc()
+                            logger.log({
+                                "url": None,
+                                "title": "INVOICE_ERROR",
+                                "order_ref":order,
+                                "method": "POST",
+                                "status_code": 500,
+                                "kino_status":None,
+                                "request": None,
+                                "response": err_text
+                            })
+            else:
+                raw_payloads = create_post_invoice_payload(order_ref=None,start_date=start_date,end_date=end_date)
+                unique_so_ref = get_unique_so_ref(payloads=raw_payloads)
+                for so_ref in unique_so_ref:
+                    try:
+                        single_payloads = []
+                        for payload in raw_payloads:
+                            if payload.get('name') == so_ref:
+                                single_payloads.append(payload)
+                        payload = build_payload(single_payloads)
+                        send_single_invoice(payload)
+                    except Exception as error:
+                        print(traceback.format_exc(),error)
+                        err_text = traceback.format_exc()
+                        logger.log({
+                            "url": None,
+                            "title": "INVOICE_ERROR",
+                            "order_ref":so_ref,
+                            "method": "POST",
+                            "status_code": 500,
+                            "kino_status":None,
+                            "request": None,
+                            "response": err_text
+                        })
     except Exception as error:
         print(traceback.format_exc(),error)
         err_text = traceback.format_exc()
