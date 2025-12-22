@@ -14,6 +14,10 @@ from kino.kino_api_test import mock_data,mock_post_stock_maxlife,mock_post_stock
 from fastapi.encoders import jsonable_encoder
 import pytz
 
+from threading import Lock
+
+LOGIN_LOCK = Lock()
+
 logger = KinoLogger("kino_api_logs")
 
 load_dotenv()
@@ -91,69 +95,72 @@ def update_single(value,field):
     
 
 def login(maxlife=False):
-    # if using env
-    # url = os.getenv("KINO_GET_LOGIN_URL")
-    # client_id = os.getenv("KINO_CLIENT_ID")
-    # client_secret = os.getenv("KINO_CLIENT_SECRET")
     def token_expired(token_creation):
         if not token_creation:
             return True
 
-        # kalau disimpan string
         if isinstance(token_creation, str):
-            token_creation_dt = datetime.strptime(
+            token_creation = datetime.strptime(
                 token_creation, "%Y-%m-%d %H:%M:%S"
             )
-        else:
-            token_creation_dt = token_creation
-        now = datetime.now(pytz.timezone("Asia/Jakarta")).replace(tzinfo=None)
-        return now - token_creation_dt > timedelta(hours=24)
 
-    print(f"login function called maxlife={maxlife}\n")
+        return datetime.now() - token_creation > timedelta(hours=24)
 
-    url = get_kino_config(maxlife=maxlife).get("kino_host")+'oauth/token'
-    client_id = get_kino_config(maxlife=maxlife).get("kino_client_id")
-    client_secret = get_kino_config(maxlife=maxlife).get("kino_client_secret")
-    client_token = get_kino_config(maxlife=maxlife).get("kino_access_token")
-    client_token_ceration = get_kino_config(maxlife=maxlife).get("kino_access_token_creation")
-    if not client_token or token_expired(client_token_ceration):
-        print("generate new token True\n")
+    config = get_kino_config(maxlife=maxlife)
+
+    token_key = (
+        "kino_access_token_maxlife"
+        if maxlife else
+        "kino_access_token"
+    )
+    creation_key = (
+        "access_token_creation_maxlife"
+        if maxlife else
+        "access_token_creation"
+    )
+
+    client_token = config.get(token_key)
+    token_creation = config.get(creation_key)
+
+    if client_token and not token_expired(token_creation):
+        return {"access_token": client_token}
+
+    # lock thread
+    with LOGIN_LOCK:
+
+        config = get_kino_config(maxlife=maxlife)
+        client_token = config.get(token_key)
+        token_creation = config.get(creation_key)
+
+        if client_token and not token_expired(token_creation):
+            return {"access_token": client_token}
+
         payload = {
             "grant_type": "client_credentials",
-            "client_id": client_id,
-            "client_secret": client_secret,
+            "client_id": config["kino_client_id"],
+            "client_secret": config["kino_client_secret"],
             "scope": "*"
         }
 
         headers = {
             "Content-Type": "application/x-www-form-urlencoded"
         }
-        print(f"payload {payload}")
 
-        try:
-            response = requests.post(url, data=payload, headers=headers,timeout=60)
-            response.raise_for_status()
-            print(response.json())
-            date_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            if maxlife:
-                update_single(response.json()['access_token'],'kino_access_token_maxlife')
-                update_single(date_now,'access_token_creation_maxlife')
-            else:
-                update_single(response.json()['access_token'],'kino_access_token')
-                update_single(date_now,'access_token_creation')
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            print("Login API Error:", str(e),flush=True)
-            print("Response text:", getattr(e.response, "text", ""),flush=True)
-            return None
-        except Exception as e:
-            print("Unexpected Error during login:", str(e),flush=True)
-            return None
-    else:
-        print("generate new token False\n")
-        return {
-            "access_token": client_token
-        }
+        response = requests.post(
+            config["kino_host"] + "oauth/token",
+            data=payload,
+            headers=headers,
+            timeout=60
+        )
+        response.raise_for_status()
+
+        token = response.json()["access_token"]
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        update_single(token, token_key)
+        update_single(now_str, creation_key)
+
+        return {"access_token": token}
         
     
 
