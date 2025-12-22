@@ -31,26 +31,18 @@ def get_kino_config(maxlife=False, force_reload=False):
         return _KINO_CONFIG_CACHE[cache_key]
 
     kino_config = {
-        'kino_host': None,
-        'kino_client_id': None,
-        'kino_client_secret': None,
-        'kino_access_token': None,
-        'kino_access_token_creation': None
+        "kino_host": None,
+        "kino_client_id": None,
+        "kino_client_secret": None,
+        "kino_access_token": None,
+        "kino_access_token_creation": None
     }
 
-    query = """
+    result = execute_query_fetch("""
         SELECT field, value
         FROM tabSingles
         WHERE doctype = 'Kino API Settings'
-        AND field IN (
-            'kino_client_id','kino_client_secret','kino_host',
-            'kino_access_token','access_token_creation',
-            'kino_host_maxlife','kino_client_id_maxlife',
-            'kino_client_secret_maxlife','kino_access_token_maxlife',
-            'access_token_creation_maxlife'
-        )
-    """
-    result = execute_query_fetch(query=query)
+    """)
 
     if result:
         for row in result:
@@ -58,30 +50,28 @@ def get_kino_config(maxlife=False, force_reload=False):
             v = row["value"]
 
             if not maxlife:
-                if f == "kino_host":
-                    kino_config["kino_host"] = v
-                elif f == "kino_client_id":
-                    kino_config["kino_client_id"] = v
-                elif f == "kino_client_secret":
-                    kino_config["kino_client_secret"] = v
-                elif f == "kino_access_token":
-                    kino_config["kino_access_token"] = v
-                elif f == "access_token_creation":
-                    kino_config["kino_access_token_creation"] = v
+                mapping = {
+                    "kino_host": "kino_host",
+                    "kino_client_id": "kino_client_id",
+                    "kino_client_secret": "kino_client_secret",
+                    "kino_access_token": "kino_access_token",
+                    "access_token_creation": "kino_access_token_creation",
+                }
             else:
-                if f == "kino_host_maxlife":
-                    kino_config["kino_host"] = v
-                elif f == "kino_client_id_maxlife":
-                    kino_config["kino_client_id"] = v
-                elif f == "kino_client_secret_maxlife":
-                    kino_config["kino_client_secret"] = v
-                elif f == "kino_access_token_maxlife":
-                    kino_config["kino_access_token"] = v
-                elif f == "access_token_creation_maxlife":
-                    kino_config["kino_access_token_creation"] = v
+                mapping = {
+                    "kino_host_maxlife": "kino_host",
+                    "kino_client_id_maxlife": "kino_client_id",
+                    "kino_client_secret_maxlife": "kino_client_secret",
+                    "kino_access_token_maxlife": "kino_access_token",
+                    "access_token_creation_maxlife": "kino_access_token_creation",
+                }
+
+            if f in mapping:
+                kino_config[mapping[f]] = v
 
     _KINO_CONFIG_CACHE[cache_key] = kino_config
     return kino_config
+
 
 def update_single(value,field):
     query = f"""
@@ -108,59 +98,46 @@ def login(maxlife=False):
 
     config = get_kino_config(maxlife=maxlife)
 
-    token_key = (
-        "kino_access_token_maxlife"
-        if maxlife else
-        "kino_access_token"
-    )
-    creation_key = (
-        "access_token_creation_maxlife"
-        if maxlife else
-        "access_token_creation"
-    )
+    if config["kino_access_token"] and not token_expired(
+        config["kino_access_token_creation"]
+    ):
+        return {"access_token": config["kino_access_token"]}
 
-    client_token = config.get(token_key)
-    token_creation = config.get(creation_key)
-
-    if client_token and not token_expired(token_creation):
-        return {"access_token": client_token}
-
-    # lock thread
     with LOGIN_LOCK:
+        config = get_kino_config(maxlife=maxlife, force_reload=True)
 
-        config = get_kino_config(maxlife=maxlife)
-        client_token = config.get(token_key)
-        token_creation = config.get(creation_key)
-
-        if client_token and not token_expired(token_creation):
-            return {"access_token": client_token}
-
-        payload = {
-            "grant_type": "client_credentials",
-            "client_id": config["kino_client_id"],
-            "client_secret": config["kino_client_secret"],
-            "scope": "*"
-        }
-
-        headers = {
-            "Content-Type": "application/x-www-form-urlencoded"
-        }
+        if config["kino_access_token"] and not token_expired(
+            config["kino_access_token_creation"]
+        ):
+            return {"access_token": config["kino_access_token"]}
 
         response = requests.post(
             config["kino_host"] + "oauth/token",
-            data=payload,
-            headers=headers,
+            data={
+                "grant_type": "client_credentials",
+                "client_id": config["kino_client_id"],
+                "client_secret": config["kino_client_secret"],
+                "scope": "*"
+            },
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
             timeout=60
         )
         response.raise_for_status()
 
         token = response.json()["access_token"]
-        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        update_single(token, token_key)
-        update_single(now_str, creation_key)
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        update_single(
+            token,
+            "kino_access_token_maxlife" if maxlife else "kino_access_token"
+        )
+        update_single(
+            now,
+            "access_token_creation_maxlife" if maxlife else "access_token_creation"
+        )
+        get_kino_config(maxlife=maxlife, force_reload=True)
 
         return {"access_token": token}
+
         
     
 
