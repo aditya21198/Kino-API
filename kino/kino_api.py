@@ -805,11 +805,11 @@ def create_stock_payload(item_code: str = None, warehouse: str = None):
                 "WHLOC2": whloc2,
                 "QTY": int(kino_stock.get("balance"))
             }
-            if kino_stock.get("sub_brand").lower() not in ['maxlife','perro']:
+            if kino_stock.get("sub_brand").lower() not in ['maxlife','perro','jojo']:
                 print(kino_stock.get("sub_brand"))
                 print("non maxlife detail\n")
                 non_maxlife_detail.append(detail_row)
-            if kino_stock.get("sub_brand").lower() in ['maxlife','perro']:
+            if kino_stock.get("sub_brand").lower() in ['maxlife','perro','jojo']:
                 maxlife_detail.append(detail_row)
 
         if maxlife_detail:
