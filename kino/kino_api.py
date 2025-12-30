@@ -205,7 +205,7 @@ def grouped_data_by_order_id(query_result:list):
                 # get Region Code
                 sub_brand = row.get("sub_brand")
                 if sub_brand:
-                    if sub_brand.lower() in ["maxlife","perro"]:
+                    if sub_brand.lower() in ["maxlife","perro","jojo","kucingku"]:
                         region_code = "1002"
                     else:
                         region_code = "1000"
