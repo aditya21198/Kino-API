@@ -666,6 +666,15 @@ def worker_send_invoice(raw_payloads,is_cancel=False):
             payload = build_payload(rows,is_cancel=is_cancel)
             print(payload)
             if is_cancel:
+                latest_increment = get_last_cancelled_order_ref_name(order_ref=so_ref)
+                if latest_increment:
+                    new_order_ref = increment_name(order_ref=latest_increment[0]['order_ref'])
+                    payload[0]['DATA'][0]['ORDER_REF'] = new_order_ref
+                    payload[0]['DATA'][0]['SFA_ORDERNO'] = new_order_ref
+                else:
+                    new_order_ref = increment_name(order_ref=so_ref)
+                    payload[0]['DATA'][0]['ORDER_REF'] = new_order_ref
+                    payload[0]['DATA'][0]['SFA_ORDERNO'] = new_order_ref
                 cancel_order = check_cancelled_invoice(order_ref=so_ref)
                 if not cancel_order:
                     send_single_invoice(payload,is_cancel=is_cancel)
@@ -721,6 +730,31 @@ def check_sended_so(order_ref):
     if result:
         return result
 
+def get_last_cancelled_order_ref_name(order_ref:str):
+    query = f"""
+    SELECT order_ref
+    FROM logs.kino_api_logs
+    WHERE inv_type = 'RATE02'
+    AND order_ref LIKE '%{order_ref}%'
+    AND kino_status = 'success'
+    ORDER BY id DESC LIMIT 1
+    """
+    result = execute_query_fetch(query=query)
+    if result:
+        return result
+
+def increment_name(order_ref):
+    so = order_ref
+    part = so.split("-")[-1]
+    if len(part) < 3:
+        num = int(part)+1
+        new_so = "-".join(so.split("-")[:-1])
+        return new_so+f"-{num}"
+    else:
+        num = "-1"
+        new_so = so+num
+        return new_so
+
 def ids_post_invoice(data_dict: dict):
     order_ref = data_dict.get('ORDER_REF')
     start_date = data_dict.get('START_DATE')
@@ -735,6 +769,8 @@ def ids_post_invoice(data_dict: dict):
                     start_date=start_date,
                     end_date=end_date
                 )
+                # for test
+                # raw_payloads = mock_data_so()
                 if raw_payloads:
                     worker_send_invoice(raw_payloads=raw_payloads)
         else:
@@ -744,6 +780,8 @@ def ids_post_invoice(data_dict: dict):
                 start_date=start_date,
                 end_date=end_date
             )
+            # for test
+            # raw_payloads = mock_data_so()
             if raw_payloads:
                 worker_send_invoice(raw_payloads=raw_payloads)
         
@@ -756,6 +794,8 @@ def ids_post_invoice(data_dict: dict):
                     start_date=start_date,
                     end_date=end_date
                 )
+                # for test
+                # raw_payloads = mock_data_rdo()
                 if raw_payloads:
                     worker_send_invoice(raw_payloads=raw_payloads,is_cancel=True)
         else:
@@ -765,6 +805,8 @@ def ids_post_invoice(data_dict: dict):
                 start_date=start_date,
                 end_date=end_date
             )
+            # for test 
+            # raw_payloads = mock_data_rdo()
             if raw_payloads:
                 worker_send_invoice(raw_payloads=raw_payloads,is_cancel=True)
         
@@ -778,6 +820,8 @@ def ids_post_invoice(data_dict: dict):
                     end_date=end_date,
                     is_cancel=True
                 )
+                # for test
+                # raw_payloads = mock_data_cancel_so()
                 if raw_payloads:
                     worker_send_invoice(raw_payloads=raw_payloads,is_cancel=True)
         else:
@@ -788,6 +832,8 @@ def ids_post_invoice(data_dict: dict):
                 end_date=end_date,
                 is_cancel=True
             )
+            # for test
+            # raw_payloads = mock_data_cancel_so()
             if raw_payloads:
                 worker_send_invoice(raw_payloads=raw_payloads,is_cancel=True)
 
