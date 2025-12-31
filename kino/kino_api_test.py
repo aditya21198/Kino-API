@@ -1,4 +1,5 @@
 # mock data for test
+import datetime
 def mock_data():
     payloads = [
         {
@@ -154,3 +155,185 @@ def mock_post_stock_non_maxlife():
             }
         ]
     }
+
+
+def mock_data_rdo():
+    return [
+        {
+            'dn': 'DO-ARB-25-00171432', 
+            'name': 'SO-ARB-25-00178135', 
+            'po_no': '581883197466445226', 
+            'grand_total': 38900.01, 
+            'master_bundle_item': '', 
+            'item_code': 'KN110064', 
+            'quantity': 1.0, 
+            'harga_jual': 35045.05, 
+            'total_amount': 35045.05, 
+            'price_list_rate_dbp': 29729.72973, 
+            'is_bundle_item': 0, 
+            'store': 'Ovale Beauty', 
+            'channel': 'Shop | Tokopedia',
+            'idx': 1, 
+            'sub_brand': 'OVALE', 
+            'pi_idx': 0
+        }, 
+        {
+            'dn': 'DO-ARB-25-00171432', 
+            'name': 'SO-ARB-25-00178135', 
+            'po_no': '581883197466445226', 
+            'grand_total': 38900.01, 
+            'master_bundle_item': '', 
+            'item_code': 'KN110064', 
+            'quantity': 1.0, 
+            'harga_jual': 35045.05, 
+            'total_amount': 35045.05, 
+            'price_list_rate_dbp': 29729.72973, 
+            'is_bundle_item': 0, 
+            'store': 'Ovale Beauty', 
+            'channel': 'Shop | Tokopedia', 
+            'idx': 1, 
+            'sub_brand': 'OVALE', 
+            'pi_idx': 0
+        }
+    ]
+
+def mock_data_so():
+    return [
+    {
+        "name": "SO-ARB-25-00177945",
+        "po_no": "251230NUVM6TT6",
+        "transaction_date": datetime.date(2025, 12, 30),
+        "grand_total_with_vat": 21960.0,
+
+        "master_bundle_item": "KN601059B3",
+        "item_code": "KN601059",
+        "sub_brand": "MAXLIFE",
+
+        "quantity": 3.0,
+        "harga_jual": 19783.78,
+        "total_amount": 19783.78,
+        "tax_amount": 2176.2158,
+        "amount": 21959.9958,
+
+        "is_bundle_item": 1,
+        "store": "MAXlife & Perro Official Store",
+        "channel": "SHOPEE",
+
+        "price_list_rate_dbp": 5888.030888
+    },
+    {
+        "name": "SO-ARB-25-00177945",
+        "po_no": "251230NUVM6TT6",
+        "transaction_date": datetime.date(2025, 12, 30),
+        "grand_total_with_vat": 21960.0,
+
+        "master_bundle_item": "KN601059B3",
+        "item_code": "KN601059",
+        "sub_brand": "MAXLIFE",
+
+        "quantity": 3.0,
+        "harga_jual": 19783.78,
+        "total_amount": 19783.78,
+        "tax_amount": 2176.2158,
+        "amount": 21959.9958,
+
+        "is_bundle_item": 1,
+        "store": "MAXlife & Perro Official Store",
+        "channel": "SHOPEE",
+
+        "price_list_rate_dbp": 5888.030888
+    },
+    {
+        "name": "SO-ARB-25-00178332",
+        "po_no": "251230P8F8C2C1",
+        "transaction_date": datetime.date(2025, 12, 30),
+        "grand_total_with_vat": 68000.0,
+
+        "master_bundle_item": "KN104002+KN104003",
+        "item_code": "KN104002",
+        "sub_brand": "CLICK",
+
+        "quantity": 1.0,
+        "harga_jual": 30630.63,
+        "total_amount": 30630.63,
+        "tax_amount": 3369.3693,
+        "amount": 33999.9993,
+
+        "is_bundle_item": 1,
+        "store": "Click Official Shop",
+        "channel": "SHOPEE",
+
+        "price_list_rate_dbp": 22972.972973
+    },
+    {
+        "name": "SO-ARB-25-00178332",
+        "po_no": "251230P8F8C2C1",
+        "transaction_date": datetime.date(2025, 12, 30),
+        "grand_total_with_vat": 68000.0,
+
+        "master_bundle_item": "KN104002+KN104003",
+        "item_code": "KN104003",
+        "sub_brand": "CLICK",
+
+        "quantity": 1.0,
+        "harga_jual": 30630.63,
+        "total_amount": 30630.63,
+        "tax_amount": 3369.3693,
+        "amount": 33999.9993,
+
+        "is_bundle_item": 1,
+        "store": "Click Official Shop",
+        "channel": "SHOPEE",
+
+        "price_list_rate_dbp": 22972.972973
+    }
+]
+
+
+def mock_data_cancel_so():
+    return [
+        {
+        "name": "SO-ARB-25-00177945",
+        "po_no": "251230NUVM6TT6",
+        "transaction_date": datetime.date(2025, 12, 30),
+        "grand_total_with_vat": 21960.0,
+
+        "master_bundle_item": "KN601059B3",
+        "item_code": "KN601059",
+        "sub_brand": "MAXLIFE",
+
+        "quantity": 3.0,
+        "harga_jual": 19783.78,
+        "total_amount": 19783.78,
+        "tax_amount": 2176.2158,
+        "amount": 21959.9958,
+
+        "is_bundle_item": 1,
+        "store": "MAXlife & Perro Official Store",
+        "channel": "SHOPEE",
+
+        "price_list_rate_dbp": 5888.030888
+    },
+    {
+        "name": "SO-ARB-25-00177945",
+        "po_no": "251230NUVM6TT6",
+        "transaction_date": datetime.date(2025, 12, 30),
+        "grand_total_with_vat": 21960.0,
+
+        "master_bundle_item": "KN601059B3",
+        "item_code": "KN601059",
+        "sub_brand": "MAXLIFE",
+
+        "quantity": 3.0,
+        "harga_jual": 19783.78,
+        "total_amount": 19783.78,
+        "tax_amount": 2176.2158,
+        "amount": 21959.9958,
+
+        "is_bundle_item": 1,
+        "store": "MAXlife & Perro Official Store",
+        "channel": "SHOPEE",
+
+        "price_list_rate_dbp": 5888.030888
+    }
+    ]
