@@ -194,7 +194,7 @@ def get_price_list_item(item:str,price_list:str):
 def grouped_data_by_order_id(query_result:list,is_cancel:bool=False):
     inv_type = "INV02"
     if is_cancel:
-        inv_type="RATE02"
+        inv_type="RET01"
     grouped_data ={}
     try:
         for row in query_result:
@@ -480,7 +480,7 @@ def create_post_invoice_payload(order_ref:str = None,start_date:str = None,end_d
 def send_single_invoice(payload: json,is_cancel:bool=False):
     inv_type = "INV02"
     if is_cancel:
-        inv_type = "RATE02"
+        inv_type = "RET01"
     data = payload
     if data[0]['DATA'][0].get('REGION_CODE') == '1002':
         token = login(maxlife=True)['access_token']
@@ -711,7 +711,7 @@ def check_cancelled_invoice(order_ref):
         SELECT order_ref
         FROM logs.kino_api_logs 
         WHERE order_ref = '{order_ref}'
-        AND inv_type = 'RATE02'
+        AND inv_type = 'RET01'
         AND kino_status = 'success'
     """
     result = execute_query_fetch(query=query)
@@ -734,7 +734,7 @@ def get_last_cancelled_order_ref_name(order_ref:str):
     query = f"""
     SELECT order_ref
     FROM logs.kino_api_logs
-    WHERE inv_type = 'RATE02'
+    WHERE inv_type = 'RET01'
     AND order_ref LIKE '%{order_ref}%'
     AND kino_status = 'success'
     ORDER BY id DESC LIMIT 1
