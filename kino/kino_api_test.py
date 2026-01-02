@@ -1,4 +1,5 @@
 # mock data for test
+import datetime
 def mock_data():
     payloads = [
         {
@@ -154,3 +155,193 @@ def mock_post_stock_non_maxlife():
             }
         ]
     }
+
+
+def mock_data_rdo():
+    return [
+    {
+        "name": "SO-ARB-25-00178333",
+        "po_no": "251230P8F8C2C1",
+        "transaction_date": datetime.date(2025, 12, 30),
+        "grand_total_with_vat": 68000.0,
+
+        "master_bundle_item": "KN104002+KN104003",
+        "item_code": "KN104002",
+        "sub_brand": "CLICK",
+
+        "quantity": 1.0,
+        "harga_jual": 30630.63,
+        "total_amount": 30630.63,
+        "tax_amount": 3369.3693,
+        "amount": 33999.9993,
+
+        "is_bundle_item": 1,
+        "store": "Click Official Shop",
+        "channel": "SHOPEE",
+
+        "price_list_rate_dbp": 22972.972973
+    },
+    {
+        "name": "SO-ARB-25-00178333",
+        "po_no": "251230P8F8C2C1",
+        "transaction_date": datetime.date(2025, 12, 30),
+        "grand_total_with_vat": 68000.0,
+
+        "master_bundle_item": "KN104002+KN104003",
+        "item_code": "KN104003",
+        "sub_brand": "CLICK",
+
+        "quantity": 1.0,
+        "harga_jual": 30630.63,
+        "total_amount": 30630.63,
+        "tax_amount": 3369.3693,
+        "amount": 33999.9993,
+
+        "is_bundle_item": 1,
+        "store": "Click Official Shop",
+        "channel": "SHOPEE",
+
+        "price_list_rate_dbp": 22972.972973
+    },
+    ]
+
+def mock_data_so():
+    return [
+    {
+        "name": "SO-ARB-25-00178333",
+        "po_no": "251230P8F8C2C1",
+        "transaction_date": datetime.date(2025, 12, 30),
+        "grand_total_with_vat": 68000.0,
+
+        "master_bundle_item": "KN104002+KN104003",
+        "item_code": "KN104002",
+        "sub_brand": "CLICK",
+
+        "quantity": 1.0,
+        "harga_jual": 30630.63,
+        "total_amount": 30630.63,
+        "tax_amount": 3369.3693,
+        "amount": 33999.9993,
+
+        "is_bundle_item": 1,
+        "store": "Click Official Shop",
+        "channel": "SHOPEE",
+
+        "price_list_rate_dbp": 22972.972973
+    },
+    {
+        "name": "SO-ARB-25-00178333",
+        "po_no": "251230P8F8C2C1",
+        "transaction_date": datetime.date(2025, 12, 30),
+        "grand_total_with_vat": 68000.0,
+
+        "master_bundle_item": "KN104002+KN104003",
+        "item_code": "KN104003",
+        "sub_brand": "CLICK",
+
+        "quantity": 1.0,
+        "harga_jual": 30630.63,
+        "total_amount": 30630.63,
+        "tax_amount": 3369.3693,
+        "amount": 33999.9993,
+
+        "is_bundle_item": 1,
+        "store": "Click Official Shop",
+        "channel": "SHOPEE",
+
+        "price_list_rate_dbp": 22972.972973
+    },
+    {
+        "name": "SO-ARB-25-00178332",
+        "po_no": "251230P8F8C2C1",
+        "transaction_date": datetime.date(2025, 12, 30),
+        "grand_total_with_vat": 68000.0,
+
+        "master_bundle_item": "KN104002+KN104003",
+        "item_code": "KN104002",
+        "sub_brand": "CLICK",
+
+        "quantity": 1.0,
+        "harga_jual": 30630.63,
+        "total_amount": 30630.63,
+        "tax_amount": 3369.3693,
+        "amount": 33999.9993,
+
+        "is_bundle_item": 1,
+        "store": "Click Official Shop",
+        "channel": "SHOPEE",
+
+        "price_list_rate_dbp": 22972.972973
+    },
+    {
+        "name": "SO-ARB-25-00178332",
+        "po_no": "251230P8F8C2C1",
+        "transaction_date": datetime.date(2025, 12, 30),
+        "grand_total_with_vat": 68000.0,
+
+        "master_bundle_item": "KN104002+KN104003",
+        "item_code": "KN104003",
+        "sub_brand": "CLICK",
+
+        "quantity": 1.0,
+        "harga_jual": 30630.63,
+        "total_amount": 30630.63,
+        "tax_amount": 3369.3693,
+        "amount": 33999.9993,
+
+        "is_bundle_item": 1,
+        "store": "Click Official Shop",
+        "channel": "SHOPEE",
+
+        "price_list_rate_dbp": 22972.972973
+    }
+]
+
+
+def mock_data_cancel_so():
+    return [
+    {
+        "name": "SO-ARB-25-00178332",
+        "po_no": "251230P8F8C2C1",
+        "transaction_date": datetime.date(2025, 12, 30),
+        "grand_total_with_vat": 68000.0,
+
+        "master_bundle_item": "KN104002+KN104003",
+        "item_code": "KN104002",
+        "sub_brand": "CLICK",
+
+        "quantity": 1.0,
+        "harga_jual": 30630.63,
+        "total_amount": 30630.63,
+        "tax_amount": 3369.3693,
+        "amount": 33999.9993,
+
+        "is_bundle_item": 1,
+        "store": "Click Official Shop",
+        "channel": "SHOPEE",
+
+        "price_list_rate_dbp": 22972.972973
+    },
+    {
+        "name": "SO-ARB-25-00178332",
+        "po_no": "251230P8F8C2C1",
+        "transaction_date": datetime.date(2025, 12, 30),
+        "grand_total_with_vat": 68000.0,
+
+        "master_bundle_item": "KN104002+KN104003",
+        "item_code": "KN104003",
+        "sub_brand": "CLICK",
+
+        "quantity": 1.0,
+        "harga_jual": 30630.63,
+        "total_amount": 30630.63,
+        "tax_amount": 3369.3693,
+        "amount": 33999.9993,
+
+        "is_bundle_item": 1,
+        "store": "Click Official Shop",
+        "channel": "SHOPEE",
+
+        "price_list_rate_dbp": 22972.972973
+    }
+    ]

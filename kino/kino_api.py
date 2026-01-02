@@ -4,13 +4,13 @@ import requests
 from models import KinoPostStock
 from dotenv import load_dotenv
 import os
-from datetime import datetime,timedelta
+from datetime import datetime,timedelta,date
 from database import execute_query_fetch,get_price_list,update_table
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 from log_handler.logs import KinoLogger
-from kino.kino_api_test import mock_data,mock_post_stock_maxlife,mock_post_stock_non_maxlife
+from kino.kino_api_test import mock_data,mock_post_stock_maxlife,mock_post_stock_non_maxlife,mock_data_so,mock_data_rdo,mock_data_cancel_so
 from fastapi.encoders import jsonable_encoder
 import pytz
 
@@ -191,7 +191,10 @@ def get_price_list_item(item:str,price_list:str):
     result = get_price_list(item_code=item,price_list=price_list)
     return result
 
-def grouped_data_by_order_id(query_result:list):
+def grouped_data_by_order_id(query_result:list,is_cancel:bool=False):
+    inv_type = "INV02"
+    if is_cancel:
+        inv_type="RET01"
     grouped_data ={}
     try:
         for row in query_result:
@@ -234,7 +237,7 @@ def grouped_data_by_order_id(query_result:list):
                     'CUST_CODE1':cust_code1,
                     'CUST_CODE2':cust_code2,
                     'SALESMAN_CODE':salesman_code,
-                    'INV_TYPE':"INV02",
+                    'INV_TYPE':inv_type,
                     'ORDER_REF':row.get("name",None),
                     'ORDER_DATE':transaction_date,
                     'SFA_TGLORDER':transaction_date,
@@ -312,9 +315,9 @@ def group_details_by_order_id(query_result: list):
     except Exception as error:
         raise Exception (traceback.format_exc())
 
-def build_payload(result: list):
+def build_payload(result: list,is_cancel:bool=False):
     try:
-        grouped_data = grouped_data_by_order_id(query_result=result)
+        grouped_data = grouped_data_by_order_id(query_result=result,is_cancel=is_cancel)
         grouped_detail = group_details_by_order_id(query_result=result)
 
         payloads = []
@@ -338,15 +341,18 @@ def build_payload(result: list):
     
 
 
-def create_post_invoice_payload(order_ref:str = None,start_date:str = None,end_date:str = None):
+def create_post_invoice_payload(order_ref:str = None,start_date:str = None,end_date:str = None,is_cancel:bool=False):
     conditions = []
     condittion_start_date_end_date = []
+    docstatus = 1
+    if is_cancel:
+        docstatus = 2
     if order_ref:
         conditions.append(f"AND calc.name = '{order_ref}'")
     
     if start_date and end_date:
-        condittion_start_date_end_date.append(f"AND so.transaction_date >= '{start_date}'")
-        condittion_start_date_end_date.append(f"AND so.transaction_date <= '{end_date}'")
+        condittion_start_date_end_date.append(f"AND DATE(so.modified) >= '{start_date}'")
+        condittion_start_date_end_date.append(f"AND DATE(so.modified) <= '{end_date}'")
 
     condition_sql = " ".join(conditions) if conditions else ""
     condition_transaction_date_sql = " ".join(condittion_start_date_end_date) if condittion_start_date_end_date else ""
@@ -374,10 +380,12 @@ def create_post_invoice_payload(order_ref:str = None,start_date:str = None,end_d
                 so.po_no,
                 so.transaction_date,
                 so.grand_total,
+                so.modified,
+                so.docstatus,
                 COALESCE(pi.parent_item, "") AS master_bundle_item,
                 COALESCE(pi.item_code, soi.item_code) AS item_code,
 
-                COALESCE(pi.qty, soi.qty) - COALESCE(soi.returned_qty, 0) AS quantity,
+                COALESCE(pi.qty, soi.qty) AS quantity,
 
                 CAST(
                     COALESCE(
@@ -393,7 +401,7 @@ def create_post_invoice_payload(order_ref:str = None,start_date:str = None,end_d
                     ) AS DECIMAL(20,4)
                 )
                 * (
-                    (COALESCE(pi.qty, soi.qty) - COALESCE(soi.returned_qty, 0))
+                    COALESCE(pi.qty, soi.qty)
                     / COALESCE(pi.qty, soi.qty)
                 ) AS total_amount,
 
@@ -426,8 +434,7 @@ def create_post_invoice_payload(order_ref:str = None,start_date:str = None,end_d
             LEFT JOIN aladdin.`tabPacked Item` pi
                 ON pi.parent = so.name
                 AND pi.parent_item = soi.item_code
-
-            -- 🔥 FIX UTAMA DI SINI
+                
             LEFT JOIN aladdin.`tabItem` it
                 ON it.item_code = COALESCE(pi.item_code, soi.item_code)
 
@@ -453,7 +460,7 @@ def create_post_invoice_payload(order_ref:str = None,start_date:str = None,end_d
                 )
 
             WHERE soi.brand = 'Kino'
-            AND so.docstatus = 1
+            AND so.docstatus = {docstatus}
             {condition_transaction_date_sql}
         ) calc
         WHERE calc.quantity != 0
@@ -470,7 +477,10 @@ def create_post_invoice_payload(order_ref:str = None,start_date:str = None,end_d
     except Exception as error:
         raise Exception(traceback.format_exc())
 
-def send_single_invoice(payload: json):
+def send_single_invoice(payload: json,is_cancel:bool=False):
+    inv_type = "INV02"
+    if is_cancel:
+        inv_type = "RET01"
     data = payload
     if data[0]['DATA'][0].get('REGION_CODE') == '1002':
         token = login(maxlife=True)['access_token']
@@ -495,6 +505,7 @@ def send_single_invoice(payload: json):
         log_data = {
             "url": url,
             "title": "SEND_SINGLE_INVOICE",
+            "inv_type":inv_type,
             "order_ref":data[0]['DATA'][0]['ORDER_REF'],
             "method": "POST",
             "status_code": response.status_code if response else None,
@@ -517,6 +528,7 @@ def send_single_invoice(payload: json):
         logger.log({
             "url": url,
             "title": "SEND_SINGLE_INVOICE_ERROR",
+            "inv_type":inv_type,
             "order_ref":data[0]['DATA'][0]['ORDER_REF'],
             "method": "POST",
             "status_code": 500,
@@ -535,95 +547,295 @@ def get_unique_so_ref(payloads:list):
             so_refs.add(so_ref)
     return list(so_refs)
 
+def create_update_invoice_payload_dn_rdo(order_ref:str,start_date:str,end_date:str):
+    sql_condition = f"AND dii.against_sales_order = '{order_ref}'" if order_ref else ""
+    query = f"""
+            SELECT
+                dii.parent AS dn,
+                dii.against_sales_order AS name,
+                so.po_no,
+                so.grand_total,
+
+                COALESCE(pi.parent_item, '') AS master_bundle_item,
+                COALESCE(pi.item_code, dii.item_code) AS item_code,
+
+                CASE
+                    WHEN COALESCE(pi.qty, dii.qty) < 0
+                        THEN COALESCE(pi.qty, dii.qty) * -1
+                    ELSE COALESCE(pi.qty, dii.qty)
+                END AS quantity,
+
+                CAST(
+                    COALESCE(
+                        dii.rate * pi.qty / pi_totals.total_qty,
+                        dii.rate
+                    ) AS DECIMAL(20,4)
+                ) AS harga_jual,
+
+                CAST(
+                    COALESCE(
+                        (dii.rate / pi_totals.total_qty) * pi.qty,
+                        dii.rate * (dii.qty * -1)
+                    ) AS DECIMAL(20,4)
+                )
+                * (
+                    COALESCE(pi.qty, (dii.qty * -1))
+                    / COALESCE(pi.qty, (dii.qty * -1))
+                ) AS total_amount,
+
+                (
+                    SELECT ip.price_list_rate
+                    FROM `tabItem Price` ip
+                    WHERE ip.item_code = COALESCE(pi.item_code, dii.item_code)
+                    AND ip.price_list = 'DBP'
+                    AND ip.valid_from <= so.transaction_date
+                    ORDER BY ip.valid_from DESC
+                    LIMIT 1
+                ) AS price_list_rate_dbp,
+
+                CASE
+                    WHEN pi.item_code IS NOT NULL THEN 1
+                    ELSE 0
+                END AS is_bundle_item,
+
+                JSON_UNQUOTE(JSON_EXTRACT(api_log.response, '$.data.price[0].store'))   AS store,
+                JSON_UNQUOTE(JSON_EXTRACT(api_log.response, '$.data.price[0].channel')) AS channel,
+
+                dii.idx,
+                it.sub_brand,
+                COALESCE(pi.idx, 0) AS pi_idx
+
+            FROM `tabDelivery Note Item` dii
+
+            LEFT JOIN `tabDelivery Note` dn
+                ON dn.name = dii.parent
+
+            LEFT JOIN `tabSales Order` so
+                ON so.name = dii.against_sales_order
+
+            LEFT JOIN `tabPacked Item` pi
+                ON pi.parent = so.name
+            AND pi.parent_item = dii.item_code
+
+            LEFT JOIN (
+                SELECT
+                    parent,
+                    parent_item,
+                    SUM(qty) AS total_qty
+                FROM `tabPacked Item`
+                GROUP BY parent, parent_item
+            ) pi_totals
+                ON pi_totals.parent = so.name
+            AND pi_totals.parent_item = dii.item_code
+
+            LEFT JOIN logs.erpnext_arbi_titipaja_api_log api_log
+                ON api_log.po_no = so.po_no
+            AND api_log.title = 'Price Detail'
+            AND api_log.created_at = (
+                    SELECT MAX(l2.created_at)
+                    FROM logs.erpnext_arbi_titipaja_api_log l2
+                    WHERE l2.po_no = so.po_no
+                    AND l2.title = 'Price Detail'
+            )
+
+            LEFT JOIN `tabItem` it
+                ON it.item_code = COALESCE(pi.item_code, dii.item_code)
+
+            WHERE DATE(dii.modified) >= '{start_date}'
+            AND DATE(dii.modified) <= '{end_date}'
+            AND dii.against_sales_order IS NOT NULL
+            AND dn.is_return = 1
+            {sql_condition}
+            AND dii.brand = 'Kino';
+    """
+    print(query)
+    result = execute_query_fetch(query=query)
+    if result:
+        return result
+
+def worker_send_invoice(raw_payloads,is_cancel=False):
+    grouped = {}
+    for row in raw_payloads:
+        so_ref = row.get('name')
+        if not so_ref:
+            continue
+        grouped.setdefault(so_ref, []).append(row)
+
+    def worker(so_ref, rows):
+        try:
+            payload = build_payload(rows,is_cancel=is_cancel)
+            print(payload)
+            if is_cancel:
+                latest_increment = get_last_cancelled_order_ref_name(order_ref=so_ref)
+                if latest_increment:
+                    new_order_ref = increment_name(order_ref=latest_increment[0]['order_ref'])
+                    payload[0]['DATA'][0]['ORDER_REF'] = new_order_ref
+                    payload[0]['DATA'][0]['SFA_ORDERNO'] = new_order_ref
+                else:
+                    new_order_ref = increment_name(order_ref=so_ref)
+                    payload[0]['DATA'][0]['ORDER_REF'] = new_order_ref
+                    payload[0]['DATA'][0]['SFA_ORDERNO'] = new_order_ref
+                cancel_order = check_cancelled_invoice(order_ref=so_ref)
+                if not cancel_order:
+                    send_single_invoice(payload,is_cancel=is_cancel)
+            else:
+                send_single_invoice(payload)
+        except Exception:
+            err_text = traceback.format_exc()
+            logger.log({
+                "url": None,
+                "title": "INVOICE_ERROR",
+                "order_ref": so_ref,
+                "method": "POST",
+                "status_code": 500,
+                "kino_status": None,
+                "request": None,
+                "response": err_text
+            })
+
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = [
+            executor.submit(worker, so_ref, rows)
+            for so_ref, rows in grouped.items()
+        ]
+
+        for future in as_completed(futures):
+            try:
+                future.result()
+            except Exception:
+                print(traceback.format_exc())
+                raise Exception(traceback.format_exc())
+
+def check_cancelled_invoice(order_ref):
+    query = f"""
+        SELECT order_ref
+        FROM logs.kino_api_logs 
+        WHERE order_ref = '{order_ref}'
+        AND inv_type = 'RET01'
+        AND kino_status = 'success'
+    """
+    result = execute_query_fetch(query=query)
+    if result:
+        return result
+
+def check_sended_so(order_ref):
+    query = f"""
+        SELECT order_ref
+        FROM logs.kino_api_logs
+        WHERE order_ref = '{order_ref}'
+        AND inv_type = 'INV02'
+        AND kino_status = 'success'
+    """
+    result = execute_query_fetch(query=query)
+    if result:
+        return result
+
+def get_last_cancelled_order_ref_name(order_ref:str):
+    query = f"""
+    SELECT order_ref
+    FROM logs.kino_api_logs
+    WHERE inv_type = 'RET01'
+    AND order_ref LIKE '%{order_ref}%'
+    AND kino_status = 'success'
+    ORDER BY id DESC LIMIT 1
+    """
+    result = execute_query_fetch(query=query)
+    if result:
+        return result
+
+def increment_name(order_ref):
+    so = order_ref
+    part = so.split("-")[-1]
+    if len(part) < 3:
+        num = int(part)+1
+        new_so = "-".join(so.split("-")[:-1])
+        return new_so+f"-{num}"
+    else:
+        num = "-1"
+        new_so = so+num
+        return new_so
+
 def ids_post_invoice(data_dict: dict):
     order_ref = data_dict.get('ORDER_REF')
     start_date = data_dict.get('START_DATE')
     end_date = data_dict.get('END_DATE')
     try:
+        # send first sales order
         if order_ref:
+            print("insert so")
             for order in order_ref:
                 raw_payloads = create_post_invoice_payload(
                     order_ref=order,
                     start_date=start_date,
                     end_date=end_date
                 )
-                grouped = {}
-                for row in raw_payloads:
-                    so_ref = row.get('name')
-                    if not so_ref:
-                        continue
-                    grouped.setdefault(so_ref, []).append(row)
-
-                def worker(so_ref, rows):
-                    try:
-                        payload = build_payload(rows)
-                        print(payload)
-                        send_single_invoice(payload)
-                    except Exception:
-                        err_text = traceback.format_exc()
-                        logger.log({
-                            "url": None,
-                            "title": "INVOICE_ERROR",
-                            "order_ref": so_ref,
-                            "method": "POST",
-                            "status_code": 500,
-                            "kino_status": None,
-                            "request": None,
-                            "response": err_text
-                        })
-
-                with ThreadPoolExecutor(max_workers=5) as executor:
-                    futures = [
-                        executor.submit(worker, so_ref, rows)
-                        for so_ref, rows in grouped.items()
-                    ]
-
-                    for future in as_completed(futures):
-                        try:
-                            future.result()
-                        except Exception:
-                            print(traceback.format_exc())
+                # for test
+                # raw_payloads = mock_data_so()
+                if raw_payloads:
+                    worker_send_invoice(raw_payloads=raw_payloads)
         else:
+            print("insert so")
             raw_payloads = create_post_invoice_payload(
                 order_ref=None,
                 start_date=start_date,
                 end_date=end_date
             )
-            grouped = {}
-            for row in raw_payloads:
-                so_ref = row.get('name')
-                if not so_ref:
-                    continue
-                grouped.setdefault(so_ref, []).append(row)
-
-            def worker(so_ref, rows):
-                try:
-                    payload = build_payload(rows)
-                    send_single_invoice(payload)
-                except Exception:
-                    err_text = traceback.format_exc()
-                    logger.log({
-                        "url": None,
-                        "title": "INVOICE_ERROR",
-                        "order_ref": so_ref,
-                        "method": "POST",
-                        "status_code": 500,
-                        "kino_status": None,
-                        "request": None,
-                        "response": err_text
-                    })
-
-            with ThreadPoolExecutor(max_workers=5) as executor:
-                futures = [
-                    executor.submit(worker, so_ref, rows)
-                    for so_ref, rows in grouped.items()
-                ]
-
-                for future in as_completed(futures):
-                    try:
-                        future.result()
-                    except Exception:
-                        print(traceback.format_exc())
+            # for test
+            # raw_payloads = mock_data_so()
+            if raw_payloads:
+                worker_send_invoice(raw_payloads=raw_payloads)
+        
+        # RDO invoice
+        if order_ref:
+            print("cancel RDO")
+            for order in order_ref:
+                raw_payloads = create_update_invoice_payload_dn_rdo(
+                    order_ref=order,
+                    start_date=start_date,
+                    end_date=end_date
+                )
+                # for test
+                # raw_payloads = mock_data_rdo()
+                if raw_payloads:
+                    worker_send_invoice(raw_payloads=raw_payloads,is_cancel=True)
+        else:
+            print("cancel RDO")
+            raw_payloads=create_update_invoice_payload_dn_rdo(
+                order_ref=None,
+                start_date=start_date,
+                end_date=end_date
+            )
+            # for test 
+            # raw_payloads = mock_data_rdo()
+            if raw_payloads:
+                worker_send_invoice(raw_payloads=raw_payloads,is_cancel=True)
+        
+        # Cancel SO
+        if order_ref:
+            print("cancel so")
+            for order in order_ref:
+                raw_payloads = create_post_invoice_payload(
+                    order_ref=order,
+                    start_date=start_date,
+                    end_date=end_date,
+                    is_cancel=True
+                )
+                # for test
+                # raw_payloads = mock_data_cancel_so()
+                if raw_payloads:
+                    worker_send_invoice(raw_payloads=raw_payloads,is_cancel=True)
+        else:
+            print("cancel so")
+            raw_payloads = create_post_invoice_payload(
+                order_ref=None,
+                start_date=start_date,
+                end_date=end_date,
+                is_cancel=True
+            )
+            # for test
+            # raw_payloads = mock_data_cancel_so()
+            if raw_payloads:
+                worker_send_invoice(raw_payloads=raw_payloads,is_cancel=True)
 
     except Exception:
         err_text = traceback.format_exc()
@@ -952,11 +1164,13 @@ def post_stock(data: KinoPostStock = None):
 # test only
 if __name__ == '__main__':
     try:
-        header_maxlife, header_without_maxlife = create_stock_payload()
-        print("Maxlife Payload:")
-        print(header_maxlife)
-        print("\nNon-Maxlife Payload:")
-        print(header_without_maxlife)
+        raw = create_post_invoice_payload(
+            order_ref='SO-ARB-25-00177945',
+            start_date='2025-12-31',
+            end_date='2025-12-31'
+        )
+        print(raw)
+
     except Exception as e:
         print(f"{datetime.now()} : Error in main function", flush=True)
         print(traceback.format_exc())
