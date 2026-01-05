@@ -550,104 +550,111 @@ def get_unique_so_ref(payloads:list):
 def create_update_invoice_payload_dn_rdo(order_ref:str,start_date:str,end_date:str):
     sql_condition = f"AND dii.against_sales_order = '{order_ref}'" if order_ref else ""
     query = f"""
+        SELECT
+            dii.parent AS dn,
+            dii.against_sales_order AS name,
+            so.po_no,
+            so.grand_total,
+            so.transaction_date,
+
+            COALESCE(pi.parent_item, '') AS master_bundle_item,
+            COALESCE(pi.item_code, dii.item_code) AS item_code,
+
+            CAST(
+                COALESCE(
+                    (dii.rate / pi_totals.total_qty) * pi.qty,
+                    dii.rate * (dii.qty * -1)
+                ) * 0.11
+                AS DECIMAL(20,4)
+            ) AS tax_amount,
+
+            CAST(
+                COALESCE(
+                    (dii.rate / pi_totals.total_qty) * pi.qty,
+                    dii.rate * (dii.qty * -1)
+                ) * 1.11
+                AS DECIMAL(20,4)
+            ) AS amount,
+
+            ABS(COALESCE(pi.qty, dii.qty)) AS quantity,
+
+            CAST(
+                COALESCE(
+                    dii.rate * pi.qty / pi_totals.total_qty,
+                    dii.rate
+                ) AS DECIMAL(20,4)
+            ) AS harga_jual,
+
+            CAST(
+                COALESCE(
+                    (dii.rate / pi_totals.total_qty) * pi.qty,
+                    dii.rate * (dii.qty * -1)
+                ) AS DECIMAL(20,4)
+            ) AS total_amount,
+
+            (
+                SELECT ip.price_list_rate
+                FROM `tabItem Price` ip
+                WHERE ip.item_code = COALESCE(pi.item_code, dii.item_code)
+                AND ip.price_list = 'DBP'
+                AND ip.valid_from <= so.transaction_date
+                ORDER BY ip.valid_from DESC
+                LIMIT 1
+            ) AS price_list_rate_dbp,
+
+            CASE
+                WHEN pi.item_code IS NOT NULL THEN 1
+                ELSE 0
+            END AS is_bundle_item,
+
+            JSON_UNQUOTE(JSON_EXTRACT(api_log.response, '$.data.price[0].store'))   AS store,
+            JSON_UNQUOTE(JSON_EXTRACT(api_log.response, '$.data.price[0].channel')) AS channel,
+
+            dii.idx,
+            it.sub_brand,
+            COALESCE(pi.idx, 0) AS pi_idx
+
+        FROM `tabDelivery Note Item` dii
+
+        LEFT JOIN `tabDelivery Note` dn
+            ON dn.name = dii.parent
+
+        LEFT JOIN `tabSales Order` so
+            ON so.name = dii.against_sales_order
+
+        LEFT JOIN `tabPacked Item` pi
+            ON pi.parent = so.name
+        AND pi.parent_item = dii.item_code
+
+        LEFT JOIN (
             SELECT
-                dii.parent AS dn,
-                dii.against_sales_order AS name,
-                so.po_no,
-                so.grand_total,
-                so.transaction_date,
+                parent,
+                parent_item,
+                SUM(qty) AS total_qty
+            FROM `tabPacked Item`
+            GROUP BY parent, parent_item
+        ) pi_totals
+            ON pi_totals.parent = so.name
+        AND pi_totals.parent_item = dii.item_code
 
-                COALESCE(pi.parent_item, '') AS master_bundle_item,
-                COALESCE(pi.item_code, dii.item_code) AS item_code,
+        LEFT JOIN logs.erpnext_arbi_titipaja_api_log api_log
+            ON api_log.po_no = so.po_no
+        AND api_log.title = 'Price Detail'
+        AND api_log.created_at = (
+                SELECT MAX(l2.created_at)
+                FROM logs.erpnext_arbi_titipaja_api_log l2
+                WHERE l2.po_no = so.po_no
+                AND l2.title = 'Price Detail'
+        )
 
-                CASE
-                    WHEN COALESCE(pi.qty, dii.qty) < 0
-                        THEN COALESCE(pi.qty, dii.qty) * -1
-                    ELSE COALESCE(pi.qty, dii.qty)
-                END AS quantity,
+        LEFT JOIN `tabItem` it
+            ON it.item_code = COALESCE(pi.item_code, dii.item_code)
 
-                CAST(
-                    COALESCE(
-                        dii.rate * pi.qty / pi_totals.total_qty,
-                        dii.rate
-                    ) AS DECIMAL(20,4)
-                ) AS harga_jual,
-
-                CAST(
-                    COALESCE(
-                        (dii.rate / pi_totals.total_qty) * pi.qty,
-                        dii.rate * (dii.qty * -1)
-                    ) AS DECIMAL(20,4)
-                )
-                * (
-                    COALESCE(pi.qty, (dii.qty * -1))
-                    / COALESCE(pi.qty, (dii.qty * -1))
-                ) AS total_amount,
-
-                (
-                    SELECT ip.price_list_rate
-                    FROM `tabItem Price` ip
-                    WHERE ip.item_code = COALESCE(pi.item_code, dii.item_code)
-                    AND ip.price_list = 'DBP'
-                    AND ip.valid_from <= so.transaction_date
-                    ORDER BY ip.valid_from DESC
-                    LIMIT 1
-                ) AS price_list_rate_dbp,
-
-                CASE
-                    WHEN pi.item_code IS NOT NULL THEN 1
-                    ELSE 0
-                END AS is_bundle_item,
-
-                JSON_UNQUOTE(JSON_EXTRACT(api_log.response, '$.data.price[0].store'))   AS store,
-                JSON_UNQUOTE(JSON_EXTRACT(api_log.response, '$.data.price[0].channel')) AS channel,
-
-                dii.idx,
-                it.sub_brand,
-                COALESCE(pi.idx, 0) AS pi_idx
-
-            FROM `tabDelivery Note Item` dii
-
-            LEFT JOIN `tabDelivery Note` dn
-                ON dn.name = dii.parent
-
-            LEFT JOIN `tabSales Order` so
-                ON so.name = dii.against_sales_order
-
-            LEFT JOIN `tabPacked Item` pi
-                ON pi.parent = so.name
-            AND pi.parent_item = dii.item_code
-
-            LEFT JOIN (
-                SELECT
-                    parent,
-                    parent_item,
-                    SUM(qty) AS total_qty
-                FROM `tabPacked Item`
-                GROUP BY parent, parent_item
-            ) pi_totals
-                ON pi_totals.parent = so.name
-            AND pi_totals.parent_item = dii.item_code
-
-            LEFT JOIN logs.erpnext_arbi_titipaja_api_log api_log
-                ON api_log.po_no = so.po_no
-            AND api_log.title = 'Price Detail'
-            AND api_log.created_at = (
-                    SELECT MAX(l2.created_at)
-                    FROM logs.erpnext_arbi_titipaja_api_log l2
-                    WHERE l2.po_no = so.po_no
-                    AND l2.title = 'Price Detail'
-            )
-
-            LEFT JOIN `tabItem` it
-                ON it.item_code = COALESCE(pi.item_code, dii.item_code)
-
-            WHERE DATE(dii.modified) >= '{start_date}'
-            AND DATE(dii.modified) <= '{end_date}'
-            AND dii.against_sales_order IS NOT NULL
-            AND dn.is_return = 1
-            {sql_condition}
-            AND dii.brand = 'Kino';
+        WHERE DATE(dii.modified) BETWEEN '{start_date}' AND '{end_date}'
+        AND dii.against_sales_order IS NOT NULL
+        AND dn.is_return = 1
+        {sql_condition}
+        AND dii.brand = 'Kino';
     """
     print(query)
     result = execute_query_fetch(query=query)
