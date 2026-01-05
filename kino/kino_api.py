@@ -555,6 +555,7 @@ def create_update_invoice_payload_dn_rdo(order_ref:str,start_date:str,end_date:s
                 dii.against_sales_order AS name,
                 so.po_no,
                 so.grand_total,
+                so.transaction_date,
 
                 COALESCE(pi.parent_item, '') AS master_bundle_item,
                 COALESCE(pi.item_code, dii.item_code) AS item_code,
