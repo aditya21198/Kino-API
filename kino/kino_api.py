@@ -141,7 +141,41 @@ def login(maxlife=False):
         
     
 
-def get_customer_code(store:str,channel:str,region_id:str):
+# def get_customer_code(store:str,channel:str,region_id:str):
+#     query = """
+#     SELECT
+#         store,
+#         channel,
+#         cm_region,
+#         cm_entity,
+#         cm_branch,
+#         cm_cust_code1,
+#         cm_cust_code2,
+#         cm_cust_name 
+#     FROM `tabCustomer Mapping Detail`
+#     WHERE parent = 'Kino API Settings'
+#     """
+#     try:
+#         customers_mapping = execute_query_fetch(query=query)
+#         lower_store = store.lower()
+#         lower_channel = channel.lower()
+#         found = False
+#         for customer in customers_mapping:
+#             if customer.get('store') == lower_store and customer.get('channel') == lower_channel and region_id == customer.get('cm_region'):
+#                 found = True
+#                 return customer.get('cm_cust_code1'),customer.get('cm_cust_code2'),customer.get('cm_entity'),customer.get('cm_branch')
+#         if not found:
+#             raise Exception (f"Customer Code with store {store} and channel {channel} not found")
+#     except Exception as e:
+#         raise Exception (f"Customer Code with store {store} and channel {channel} not found")
+# cache global
+CUSTOMER_MAPPING_CACHE = None
+
+def load_customer_mapping():
+    global CUSTOMER_MAPPING_CACHE
+    if CUSTOMER_MAPPING_CACHE is not None:
+        return CUSTOMER_MAPPING_CACHE
+
     query = """
     SELECT
         store,
@@ -150,170 +184,297 @@ def get_customer_code(store:str,channel:str,region_id:str):
         cm_entity,
         cm_branch,
         cm_cust_code1,
-        cm_cust_code2,
-        cm_cust_name 
+        cm_cust_code2
     FROM `tabCustomer Mapping Detail`
     WHERE parent = 'Kino API Settings'
     """
-    try:
-        customers_mapping = execute_query_fetch(query=query)
-        lower_store = store.lower()
-        lower_channel = channel.lower()
-        found = False
-        for customer in customers_mapping:
-            if customer.get('store') == lower_store and customer.get('channel') == lower_channel and region_id == customer.get('cm_region'):
-                found = True
-                return customer.get('cm_cust_code1'),customer.get('cm_cust_code2'),customer.get('cm_entity'),customer.get('cm_branch')
-        if not found:
-            raise Exception (f"Customer Code with store {store} and channel {channel} not found")
-    except Exception as e:
-        raise Exception (f"Customer Code with store {store} and channel {channel} not found")
+    result = execute_query_fetch(query=query)
+    mapping = {}
+    for row in result:
+        key = (row['store'].lower(), row['channel'].lower(), row['cm_region'])
+        mapping[key] = (
+            row['cm_cust_code1'],
+            row['cm_cust_code2'],
+            row['cm_entity'],
+            row['cm_branch']
+        )
+    CUSTOMER_MAPPING_CACHE = mapping
+    return mapping
+
+def get_customer_code(store:str, channel:str, region_id:str):
+    mapping = load_customer_mapping()
+    key = (store.lower(), channel.lower(), region_id)
+    if key in mapping:
+        return mapping[key]
+    raise Exception(f"Customer Code with store {store} and channel {channel} not found")
 
 def remove_kn(item_code: str):
     if item_code.startswith("KN"):
         return item_code[2:]
     return item_code
 
-def get_salesman_code(region_id:str):
+# def get_salesman_code(region_id:str):
+#     query = """
+#     SELECT gms_region,gms_entity,gms_branch,gms_salesman_id,gms_salesman_name 
+#     FROM `tabSalesman Mapping Detail`
+#     WHERE parent = 'Kino API Settings'
+#     """
+#     salesman_mapping = execute_query_fetch(query=query)
+#     if salesman_mapping:
+#         for salesman in salesman_mapping:
+#             if salesman['gms_region'] == region_id:
+#                 return salesman
+#     raise Exception ("Salesman Not Found in Salesman mapping")
+
+# cache global
+SALESMAN_MAPPING_CACHE = None
+
+def load_salesman_mapping():
+    global SALESMAN_MAPPING_CACHE
+    if SALESMAN_MAPPING_CACHE is not None:
+        return SALESMAN_MAPPING_CACHE
+
     query = """
-    SELECT gms_region,gms_entity,gms_branch,gms_salesman_id,gms_salesman_name 
+    SELECT gms_region, gms_entity, gms_branch, gms_salesman_id, gms_salesman_name 
     FROM `tabSalesman Mapping Detail`
     WHERE parent = 'Kino API Settings'
     """
-    salesman_mapping = execute_query_fetch(query=query)
-    if salesman_mapping:
-        for salesman in salesman_mapping:
-            if salesman['gms_region'] == region_id:
-                return salesman
-    raise Exception ("Salesman Not Found in Salesman mapping")
+    result = execute_query_fetch(query=query)
+    mapping = {}
+    for row in result:
+        # key berdasarkan region_id
+        mapping[row['gms_region']] = row
+    SALESMAN_MAPPING_CACHE = mapping
+    return mapping
+
+def get_salesman_code(region_id: str):
+    mapping = load_salesman_mapping()
+    if region_id in mapping:
+        return mapping[region_id]
+    raise Exception("Salesman Not Found in Salesman mapping")
+
 
 def get_price_list_item(item:str,price_list:str):
     result = get_price_list(item_code=item,price_list=price_list)
     return result
 
-def grouped_data_by_order_id(query_result:list,is_cancel:bool=False):
+def grouped_data_by_order_id(query_result: list, is_cancel: bool = False):
     inv_type = "INV02"
     if is_cancel:
-        inv_type="RET01"
-    grouped_data ={}
-    try:
-        for row in query_result:
-            order_id = row.get('name')
-            if not order_id:
-                continue
+        inv_type = "RET01"
 
-            if order_id not in grouped_data:
-                grouped_data[order_id] = []
-            
-                # get Region Code
+    grouped_data = {}
+
+    for row in query_result:
+        order_id = row.get('name')
+        if not order_id:
+            continue
+
+        if order_id not in grouped_data:
+            grouped_data[order_id] = []
+
+            try:
+                # === REGION CODE ===
                 sub_brand = row.get("sub_brand")
-                if sub_brand:
-                    if sub_brand.lower() in ["maxlife","perro","jojo","kucingku"]:
-                        region_code = "1002"
-                    else:
-                        region_code = "1000"
+                if sub_brand and sub_brand.lower() in ["maxlife", "perro", "jojo", "kucingku"]:
+                    region_code = "1002"
                 else:
                     region_code = "1000"
-                
-                # Formated Customer Name
-                store = row.get('store',None)
-                channel = row.get('channel',None)
 
-                print(row.get('name',None))
-                print('so name')
+                # === CUSTOMER CODE ===
+                store = row.get('store')
+                channel = row.get('channel')
 
-                cust_code1 = get_customer_code(store=store,channel=channel,region_id=region_code)[0]
-                cust_code2 = get_customer_code(store=store,channel=channel,region_id=region_code)[1]
-                entity_code = get_customer_code(store=store,channel=channel,region_id=region_code)[2]
-                branch_code = get_customer_code(store=store,channel=channel,region_id=region_code)[3]
-                salesman_code = get_salesman_code(region_id=region_code)['gms_salesman_id']
+                cust_code1, cust_code2, entity_code, branch_code = \
+                    get_customer_code(
+                        store=store,
+                        channel=channel,
+                        region_id=region_code
+                    )
 
-                transaction_date = row.get("transaction_date").isoformat() if row.get("transaction_date",None) else None
+                salesman_code = get_salesman_code(
+                    region_id=region_code
+                )['gms_salesman_id']
+
+                transaction_date = (
+                    row.get("transaction_date").isoformat()
+                    if row.get("transaction_date")
+                    else None
+                )
 
                 grouped_data[order_id].append({
-                    'REGION_CODE':region_code,
-                    'BRANCH_CODE':branch_code,
-                    'ENTITY_CODE':str(entity_code),
-                    'CUST_CODE1':cust_code1,
-                    'CUST_CODE2':cust_code2,
-                    'SALESMAN_CODE':salesman_code,
-                    'INV_TYPE':inv_type,
-                    'ORDER_REF':row.get("name",None),
-                    'ORDER_DATE':transaction_date,
-                    'SFA_TGLORDER':transaction_date,
-                    'SFA_ORDERNO':row.get("name",None),
-                    'SFA_SLSNO':salesman_code
+                    'REGION_CODE': region_code,
+                    'BRANCH_CODE': branch_code,
+                    'ENTITY_CODE': str(entity_code),
+                    'CUST_CODE1': cust_code1,
+                    'CUST_CODE2': cust_code2,
+                    'SALESMAN_CODE': salesman_code,
+                    'INV_TYPE': inv_type,
+                    'ORDER_REF': order_id,
+                    'ORDER_DATE': transaction_date,
+                    'SFA_TGLORDER': transaction_date,
+                    'SFA_ORDERNO': order_id,
+                    'SFA_SLSNO': salesman_code
                 })
-        return grouped_data
-    except Exception as error:
-        raise Exception(traceback.format_exc())
+
+            except Exception as e:
+                # ⛔ skip order ini aja
+                print(f"[SKIP ORDER {order_id}] {e}")
+                grouped_data.pop(order_id, None)
+                continue
+
+    return grouped_data
+
         
 
+
+# def group_details_by_order_id(query_result: list):
+#     grouped_detail = {}
+#     try:
+
+#         for row in query_result:
+#             order_id = row.get('name')
+#             if not order_id:
+#                 continue
+
+#             if order_id not in grouped_detail:
+#                 grouped_detail[order_id] = []
+
+#             price_list_rate = row.get('price_list_rate_dbp',None)
+
+#             grouped_detail[order_id].append({
+#                 'PCODE': remove_kn(row.get('item_code')),
+#                 'PRICE': price_list_rate,
+#                 'LINETYPE': 'N',
+#                 'QTY': row.get('quantity'),
+#                 'GROSS': row.get('total_amount'),
+
+#                 'DISC_ID1': "",
+#                 'DISC_PRINCIPAL_PCT1': 0.0,
+#                 'DISC_PRINCIPAL_VAL1': 0.0,
+#                 'DISC_DIST_PCT1': 0.0,
+#                 'DISC_DIST_VAL1': 0.0,
+
+#                 'DISC_ID2': "",
+#                 'DISC_PRINCIPAL_PCT2': 0.0,
+#                 'DISC_PRINCIPAL_VAL2': 0.0,
+#                 'DISC_DIST_PCT2': 0.0,
+#                 'DISC_DIST_VAL2': 0.0,
+
+#                 'DISC_ID3': "",
+#                 'DISC_PRINCIPAL_PCT3': 0.0,
+#                 'DISC_PRINCIPAL_VAL3': 0.0,
+#                 'DISC_DIST_PCT3': 0.0,
+#                 'DISC_DIST_VAL3': 0.0,
+
+#                 'DISC_ID4': "",
+#                 'DISC_PRINCIPAL_PCT4': 0.0,
+#                 'DISC_PRINCIPAL_VAL4': 0.0,
+#                 'DISC_DIST_PCT4': 0.0,
+#                 'DISC_DIST_VAL4': 0.0,
+
+#                 'DISC_ID5': "",
+#                 'DISC_PRINCIPAL_PCT5': 0.0,
+#                 'DISC_PRINCIPAL_VAL5': 0.0,
+#                 'DISC_DIST_PCT5': 0.0,
+#                 'DISC_DIST_VAL5': 0.0,
+
+#                 'DISC_ID6': "",
+#                 'DISC_PRINCIPAL_PCT6': 0.0,
+#                 'DISC_PRINCIPAL_VAL6': 0.0,
+#                 'DISC_DIST_PCT6': 0.0,
+#                 'DISC_DIST_VAL6': 0.0,
+
+#                 'TAX_AMT': row.get('tax_amount', 0.0),
+#                 'NET': row.get('amount', 0.0),
+#                 'DISC_TOTAL': 0.0
+#             })
+#         return grouped_detail
+#     except Exception as error:
+#         raise Exception (traceback.format_exc())
 
 def group_details_by_order_id(query_result: list):
     grouped_detail = {}
     try:
-
         for row in query_result:
             order_id = row.get('name')
             if not order_id:
                 continue
 
+            # init per order
             if order_id not in grouped_detail:
-                grouped_detail[order_id] = []
+                grouped_detail[order_id] = {}
 
-            price_list_rate = row.get('price_list_rate_dbp',None)
+            item_code = remove_kn(row.get('item_code'))
+            price_list_rate = row.get('price_list_rate_dbp', None)
 
-            grouped_detail[order_id].append({
-                'PCODE': remove_kn(row.get('item_code')),
-                'PRICE': price_list_rate,
-                'LINETYPE': 'N',
-                'QTY': row.get('quantity'),
-                'GROSS': row.get('total_amount'),
+            # kalau item_code belum ada → create
+            if item_code not in grouped_detail[order_id]:
+                grouped_detail[order_id][item_code] = {
+                    'PCODE': item_code,
+                    'PRICE': price_list_rate,
+                    'LINETYPE': 'N',
+                    'QTY': row.get('quantity', 0.0),
+                    'GROSS': row.get('total_amount', 0.0),
 
-                'DISC_ID1': "",
-                'DISC_PRINCIPAL_PCT1': 0.0,
-                'DISC_PRINCIPAL_VAL1': 0.0,
-                'DISC_DIST_PCT1': 0.0,
-                'DISC_DIST_VAL1': 0.0,
+                    'DISC_ID1': "",
+                    'DISC_PRINCIPAL_PCT1': 0.0,
+                    'DISC_PRINCIPAL_VAL1': 0.0,
+                    'DISC_DIST_PCT1': 0.0,
+                    'DISC_DIST_VAL1': 0.0,
 
-                'DISC_ID2': "",
-                'DISC_PRINCIPAL_PCT2': 0.0,
-                'DISC_PRINCIPAL_VAL2': 0.0,
-                'DISC_DIST_PCT2': 0.0,
-                'DISC_DIST_VAL2': 0.0,
+                    'DISC_ID2': "",
+                    'DISC_PRINCIPAL_PCT2': 0.0,
+                    'DISC_PRINCIPAL_VAL2': 0.0,
+                    'DISC_DIST_PCT2': 0.0,
+                    'DISC_DIST_VAL2': 0.0,
 
-                'DISC_ID3': "",
-                'DISC_PRINCIPAL_PCT3': 0.0,
-                'DISC_PRINCIPAL_VAL3': 0.0,
-                'DISC_DIST_PCT3': 0.0,
-                'DISC_DIST_VAL3': 0.0,
+                    'DISC_ID3': "",
+                    'DISC_PRINCIPAL_PCT3': 0.0,
+                    'DISC_PRINCIPAL_VAL3': 0.0,
+                    'DISC_DIST_PCT3': 0.0,
+                    'DISC_DIST_VAL3': 0.0,
 
-                'DISC_ID4': "",
-                'DISC_PRINCIPAL_PCT4': 0.0,
-                'DISC_PRINCIPAL_VAL4': 0.0,
-                'DISC_DIST_PCT4': 0.0,
-                'DISC_DIST_VAL4': 0.0,
+                    'DISC_ID4': "",
+                    'DISC_PRINCIPAL_PCT4': 0.0,
+                    'DISC_PRINCIPAL_VAL4': 0.0,
+                    'DISC_DIST_PCT4': 0.0,
+                    'DISC_DIST_VAL4': 0.0,
 
-                'DISC_ID5': "",
-                'DISC_PRINCIPAL_PCT5': 0.0,
-                'DISC_PRINCIPAL_VAL5': 0.0,
-                'DISC_DIST_PCT5': 0.0,
-                'DISC_DIST_VAL5': 0.0,
+                    'DISC_ID5': "",
+                    'DISC_PRINCIPAL_PCT5': 0.0,
+                    'DISC_PRINCIPAL_VAL5': 0.0,
+                    'DISC_DIST_PCT5': 0.0,
+                    'DISC_DIST_VAL5': 0.0,
 
-                'DISC_ID6': "",
-                'DISC_PRINCIPAL_PCT6': 0.0,
-                'DISC_PRINCIPAL_VAL6': 0.0,
-                'DISC_DIST_PCT6': 0.0,
-                'DISC_DIST_VAL6': 0.0,
+                    'DISC_ID6': "",
+                    'DISC_PRINCIPAL_PCT6': 0.0,
+                    'DISC_PRINCIPAL_VAL6': 0.0,
+                    'DISC_DIST_PCT6': 0.0,
+                    'DISC_DIST_VAL6': 0.0,
 
-                'TAX_AMT': row.get('tax_amount', 0.0),
-                'NET': row.get('amount', 0.0),
-                'DISC_TOTAL': 0.0
-            })
+                    'TAX_AMT': row.get('tax_amount', 0.0),
+                    'NET': row.get('amount', 0.0),
+                    'DISC_TOTAL': 0.0
+                }
+
+            # kalau item_code sudah ada → SUM
+            else:
+                item = grouped_detail[order_id][item_code]
+                item['QTY'] += row.get('quantity', 0.0)
+                item['GROSS'] += row.get('total_amount', 0.0)
+                item['TAX_AMT'] += row.get('tax_amount', 0.0)
+                item['NET'] += row.get('amount', 0.0)
+
+        # convert dict → list (biar sama kayak sebelumnya)
+        for order_id in grouped_detail:
+            grouped_detail[order_id] = list(grouped_detail[order_id].values())
+
         return grouped_detail
-    except Exception as error:
-        raise Exception (traceback.format_exc())
+
+    except Exception:
+        raise Exception(traceback.format_exc())
+
 
 def build_payload(result: list,is_cancel:bool=False):
     try:
@@ -450,14 +611,14 @@ def create_post_invoice_payload(order_ref:str = None,start_date:str = None,end_d
                 AND pi_totals.parent_item = soi.item_code
 
             LEFT JOIN logs.erpnext_arbi_titipaja_api_log api_log
-                ON api_log.po_no = so.po_no
-                AND api_log.title = 'Price Detail'
-                AND api_log.created_at = (
-                    SELECT MAX(created_at)
-                    FROM logs.erpnext_arbi_titipaja_api_log l2
-                    WHERE l2.po_no = so.po_no
-                    AND l2.title = 'Price Detail'
-                )
+            ON api_log.id = (
+                SELECT l2.id
+                FROM logs.erpnext_arbi_titipaja_api_log l2
+                WHERE l2.po_no = so.po_no
+                AND l2.title = 'Price Detail'
+                ORDER BY l2.created_at DESC, l2.id DESC
+                LIMIT 1
+            )
 
             WHERE soi.brand = 'Kino'
             AND so.docstatus = {docstatus}
@@ -1167,18 +1328,80 @@ def post_stock(data: KinoPostStock = None):
             "request": None,
             "response": traceback.format_exc()
         })
-    
 
-# test only
+
+def generate_excel_full_payload_fast(payload, filename=None):
+    import pandas as pd
+    if not payload:
+        raise Exception("Payload kosong")
+
+    rows = []
+
+    for interface in payload:
+        interface_base = {
+            "INTERFACEID": interface.get("INTERFACEID"),
+            "CLIENTID": interface.get("CLIENTID"),
+        }
+
+        for data in interface.get("DATA", []):
+            data_base = {
+                "REGION_CODE": data.get("REGION_CODE"),
+                "BRANCH_CODE": data.get("BRANCH_CODE"),
+                "ENTITY_CODE": data.get("ENTITY_CODE"),
+                "CUST_CODE1": data.get("CUST_CODE1"),
+                "CUST_CODE2": data.get("CUST_CODE2"),
+                "SALESMAN_CODE": data.get("SALESMAN_CODE"),
+                "INV_TYPE": data.get("INV_TYPE"),
+                "ORDER_REF": data.get("ORDER_REF"),
+                "ORDER_DATE": data.get("ORDER_DATE"),
+                "SFA_TGLORDER": data.get("SFA_TGLORDER"),
+                "SFA_ORDERNO": data.get("SFA_ORDERNO"),
+                "SFA_SLSNO": data.get("SFA_SLSNO"),
+            }
+
+            for detail in data.get("DETAIL", []):
+                row = {**interface_base, **data_base, **detail}
+                rows.append(row)
+
+    df = pd.DataFrame(rows)
+
+    if not filename:
+        from datetime import datetime
+        filename = f"invoice_full_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+
+    df.to_excel(filename, index=False)
+    return filename
+
+
+
+def render_payload_to_json(payload, filename=None):
+    import json
+    from datetime import datetime
+    if not filename:
+        filename = f"payload_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+
+    with open(filename, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2, ensure_ascii=False)
+
+    return filename
+
+# Generate Excel
 if __name__ == '__main__':
     try:
+        print("running_create excel\n")
         raw = create_post_invoice_payload(
-            order_ref='SO-ARB-25-00177945',
-            start_date='2025-12-31',
+            order_ref=None,
+            start_date='2025-12-21',
             end_date='2025-12-31'
         )
-        print(raw)
 
-    except Exception as e:
+        payload = build_payload(raw)
+
+        file_path = generate_excel_full_payload_fast(payload)
+        print(f"Excel generated: {file_path}")
+        render_payload_to_json(payload=payload)
+        print(f"Json Created\n")
+
+    except Exception:
         print(f"{datetime.now()} : Error in main function", flush=True)
         print(traceback.format_exc())
