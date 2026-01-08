@@ -708,15 +708,18 @@ def get_unique_so_ref(payloads:list):
             so_refs.add(so_ref)
     return list(so_refs)
 
-def create_update_invoice_payload_dn_rdo(order_ref:str,start_date:str,end_date:str):
+def create_update_invoice_payload_dn(order_ref:str,start_date:str,end_date:str,cancel:bool=False):
     sql_condition = f"AND dii.against_sales_order = '{order_ref}'" if order_ref else ""
+    is_return = 0
+    if cancel:
+        is_return = 1
     query = f"""
         SELECT
-            dii.parent AS dn,
-            dii.against_sales_order AS name,
+            dii.parent AS name,
+            dii.against_sales_order AS so,
             so.po_no,
             so.grand_total,
-            so.transaction_date,
+            dn.posting_date,
 
             COALESCE(pi.parent_item, '') AS master_bundle_item,
             COALESCE(pi.item_code, dii.item_code) AS item_code,
@@ -724,7 +727,7 @@ def create_update_invoice_payload_dn_rdo(order_ref:str,start_date:str,end_date:s
             CAST(
                 COALESCE(
                     (dii.rate / pi_totals.total_qty) * pi.qty,
-                    dii.rate * (dii.qty * -1)
+                    dii.rate * (dii.qty)
                 ) * 0.11
                 AS DECIMAL(20,4)
             ) AS tax_amount,
@@ -732,7 +735,7 @@ def create_update_invoice_payload_dn_rdo(order_ref:str,start_date:str,end_date:s
             CAST(
                 COALESCE(
                     (dii.rate / pi_totals.total_qty) * pi.qty,
-                    dii.rate * (dii.qty * -1)
+                    dii.rate * (dii.qty)
                 ) * 1.11
                 AS DECIMAL(20,4)
             ) AS amount,
@@ -749,7 +752,7 @@ def create_update_invoice_payload_dn_rdo(order_ref:str,start_date:str,end_date:s
             CAST(
                 COALESCE(
                     (dii.rate / pi_totals.total_qty) * pi.qty,
-                    dii.rate * (dii.qty * -1)
+                    dii.rate * (dii.qty)
                 ) AS DECIMAL(20,4)
             ) AS total_amount,
 
@@ -799,13 +802,13 @@ def create_update_invoice_payload_dn_rdo(order_ref:str,start_date:str,end_date:s
         AND pi_totals.parent_item = dii.item_code
 
         LEFT JOIN logs.erpnext_arbi_titipaja_api_log api_log
-            ON api_log.po_no = so.po_no
-        AND api_log.title = 'Price Detail'
-        AND api_log.created_at = (
-                SELECT MAX(l2.created_at)
-                FROM logs.erpnext_arbi_titipaja_api_log l2
-                WHERE l2.po_no = so.po_no
-                AND l2.title = 'Price Detail'
+        ON api_log.id = (
+            SELECT l2.id
+            FROM logs.erpnext_arbi_titipaja_api_log l2
+            WHERE l2.po_no = so.po_no
+            AND l2.title = 'Price Detail'
+            ORDER BY l2.created_at DESC, l2.id DESC
+            LIMIT 1
         )
 
         LEFT JOIN `tabItem` it
@@ -813,7 +816,8 @@ def create_update_invoice_payload_dn_rdo(order_ref:str,start_date:str,end_date:s
 
         WHERE DATE(dii.modified) BETWEEN '{start_date}' AND '{end_date}'
         AND dii.against_sales_order IS NOT NULL
-        AND dn.is_return = 1
+        AND dn.docstatus = 1
+        AND dn.is_return = {is_return}
         {sql_condition}
         AND dii.brand = 'Kino';
     """
@@ -933,7 +937,7 @@ def ids_post_invoice(data_dict: dict):
         if order_ref:
             print("insert so")
             for order in order_ref:
-                raw_payloads = create_post_invoice_payload(
+                raw_payloads = create_update_invoice_payload_dn(
                     order_ref=order,
                     start_date=start_date,
                     end_date=end_date
@@ -944,7 +948,7 @@ def ids_post_invoice(data_dict: dict):
                     worker_send_invoice(raw_payloads=raw_payloads)
         else:
             print("insert so")
-            raw_payloads = create_post_invoice_payload(
+            raw_payloads = create_update_invoice_payload_dn(
                 order_ref=None,
                 start_date=start_date,
                 end_date=end_date
@@ -958,10 +962,11 @@ def ids_post_invoice(data_dict: dict):
         if order_ref:
             print("cancel RDO")
             for order in order_ref:
-                raw_payloads = create_update_invoice_payload_dn_rdo(
+                raw_payloads = create_update_invoice_payload_dn(
                     order_ref=order,
                     start_date=start_date,
-                    end_date=end_date
+                    end_date=end_date,
+                    cancel=True
                 )
                 # for test
                 # raw_payloads = mock_data_rdo()
@@ -969,42 +974,43 @@ def ids_post_invoice(data_dict: dict):
                     worker_send_invoice(raw_payloads=raw_payloads,is_cancel=True)
         else:
             print("cancel RDO")
-            raw_payloads=create_update_invoice_payload_dn_rdo(
+            raw_payloads = create_update_invoice_payload_dn(
                 order_ref=None,
                 start_date=start_date,
-                end_date=end_date
+                end_date=end_date,
+                cancel=True
             )
             # for test 
             # raw_payloads = mock_data_rdo()
             if raw_payloads:
                 worker_send_invoice(raw_payloads=raw_payloads,is_cancel=True)
         
-        # Cancel SO
-        if order_ref:
-            print("cancel so")
-            for order in order_ref:
-                raw_payloads = create_post_invoice_payload(
-                    order_ref=order,
-                    start_date=start_date,
-                    end_date=end_date,
-                    is_cancel=True
-                )
-                # for test
-                # raw_payloads = mock_data_cancel_so()
-                if raw_payloads:
-                    worker_send_invoice(raw_payloads=raw_payloads,is_cancel=True)
-        else:
-            print("cancel so")
-            raw_payloads = create_post_invoice_payload(
-                order_ref=None,
-                start_date=start_date,
-                end_date=end_date,
-                is_cancel=True
-            )
-            # for test
-            # raw_payloads = mock_data_cancel_so()
-            if raw_payloads:
-                worker_send_invoice(raw_payloads=raw_payloads,is_cancel=True)
+        # # Cancel SO
+        # if order_ref:
+        #     print("cancel so")
+        #     for order in order_ref:
+        #         raw_payloads = create_post_invoice_payload(
+        #             order_ref=order,
+        #             start_date=start_date,
+        #             end_date=end_date,
+        #             is_cancel=True
+        #         )
+        #         # for test
+        #         # raw_payloads = mock_data_cancel_so()
+        #         if raw_payloads:
+        #             worker_send_invoice(raw_payloads=raw_payloads,is_cancel=True)
+        # else:
+        #     print("cancel so")
+        #     raw_payloads = create_post_invoice_payload(
+        #         order_ref=None,
+        #         start_date=start_date,
+        #         end_date=end_date,
+        #         is_cancel=True
+        #     )
+        #     # for test
+        #     # raw_payloads = mock_data_cancel_so()
+        #     if raw_payloads:
+        #         worker_send_invoice(raw_payloads=raw_payloads,is_cancel=True)
 
     except Exception:
         err_text = traceback.format_exc()
