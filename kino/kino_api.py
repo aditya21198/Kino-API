@@ -715,8 +715,8 @@ def create_update_invoice_payload_dn(order_ref:str,start_date:str,end_date:str,c
         is_return = 1
     query = f"""
         SELECT
-            dii.parent AS name,
-            dii.against_sales_order AS so,
+            dii.parent AS dn,
+            dii.against_sales_order AS name,
             so.po_no,
             so.grand_total,
             dn.posting_date,
@@ -985,32 +985,32 @@ def ids_post_invoice(data_dict: dict):
             if raw_payloads:
                 worker_send_invoice(raw_payloads=raw_payloads,is_cancel=True)
         
-        # # Cancel SO
-        # if order_ref:
-        #     print("cancel so")
-        #     for order in order_ref:
-        #         raw_payloads = create_post_invoice_payload(
-        #             order_ref=order,
-        #             start_date=start_date,
-        #             end_date=end_date,
-        #             is_cancel=True
-        #         )
-        #         # for test
-        #         # raw_payloads = mock_data_cancel_so()
-        #         if raw_payloads:
-        #             worker_send_invoice(raw_payloads=raw_payloads,is_cancel=True)
-        # else:
-        #     print("cancel so")
-        #     raw_payloads = create_post_invoice_payload(
-        #         order_ref=None,
-        #         start_date=start_date,
-        #         end_date=end_date,
-        #         is_cancel=True
-        #     )
-        #     # for test
-        #     # raw_payloads = mock_data_cancel_so()
-        #     if raw_payloads:
-        #         worker_send_invoice(raw_payloads=raw_payloads,is_cancel=True)
+        # Cancel SO
+        if order_ref:
+            print("cancel so")
+            for order in order_ref:
+                raw_payloads = create_post_invoice_payload(
+                    order_ref=order,
+                    start_date=start_date,
+                    end_date=end_date,
+                    is_cancel=True
+                )
+                # for test
+                # raw_payloads = mock_data_cancel_so()
+                if raw_payloads:
+                    worker_send_invoice(raw_payloads=raw_payloads,is_cancel=True)
+        else:
+            print("cancel so")
+            raw_payloads = create_post_invoice_payload(
+                order_ref=None,
+                start_date=start_date,
+                end_date=end_date,
+                is_cancel=True
+            )
+            # for test
+            # raw_payloads = mock_data_cancel_so()
+            if raw_payloads:
+                worker_send_invoice(raw_payloads=raw_payloads,is_cancel=True)
 
     except Exception:
         err_text = traceback.format_exc()

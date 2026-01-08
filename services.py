@@ -39,6 +39,6 @@ def end_of_the_day_invoice_job():
     ids_post_invoice(data_dict=payload)
 
 def end_of_the_day_stock_job():
-    two_day_before_today = datetime.now() - timedelta(days=2)
-    transaction_date = two_day_before_today.date().strftime("%Y-%m-%d")
+    yesterday = datetime.now() - timedelta(days=1)
+    transaction_date = yesterday.date().strftime("%Y-%m-%d")
     post_stock(date=transaction_date)
