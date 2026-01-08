@@ -414,8 +414,8 @@ def group_details_by_order_id(query_result: list):
                     'PCODE': item_code,
                     'PRICE': price_list_rate,
                     'LINETYPE': 'N',
-                    'QTY': row.get('quantity', 0.0),
-                    'GROSS': row.get('total_amount', 0.0),
+                    'QTY': abs(row.get('quantity', 0.0)),
+                    'GROSS': abs(row.get('total_amount', 0.0)),
 
                     'DISC_ID1': "",
                     'DISC_PRINCIPAL_PCT1': 0.0,
@@ -453,18 +453,18 @@ def group_details_by_order_id(query_result: list):
                     'DISC_DIST_PCT6': 0.0,
                     'DISC_DIST_VAL6': 0.0,
 
-                    'TAX_AMT': row.get('tax_amount', 0.0),
-                    'NET': row.get('amount', 0.0),
+                    'TAX_AMT': abs(row.get('tax_amount', 0.0)),
+                    'NET': abs(row.get('amount', 0.0)),
                     'DISC_TOTAL': 0.0
                 }
 
             # kalau item_code sudah ada → SUM
             else:
                 item = grouped_detail[order_id][item_code]
-                item['QTY'] += row.get('quantity', 0.0)
-                item['GROSS'] += row.get('total_amount', 0.0)
-                item['TAX_AMT'] += row.get('tax_amount', 0.0)
-                item['NET'] += row.get('amount', 0.0)
+                item['QTY'] += abs(row.get('quantity', 0.0))
+                item['GROSS'] += abs(row.get('total_amount', 0.0))
+                item['TAX_AMT'] += abs(row.get('tax_amount', 0.0))
+                item['NET'] += abs(row.get('amount', 0.0))
 
         # convert dict → list (biar sama kayak sebelumnya)
         for order_id in grouped_detail:
@@ -719,7 +719,7 @@ def create_update_invoice_payload_dn(order_ref:str,start_date:str,end_date:str,c
             dii.against_sales_order AS name,
             so.po_no,
             so.grand_total,
-            dn.posting_date,
+            so.transaction_date,
 
             COALESCE(pi.parent_item, '') AS master_bundle_item,
             COALESCE(pi.item_code, dii.item_code) AS item_code,
