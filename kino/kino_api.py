@@ -414,8 +414,8 @@ def group_details_by_order_id(query_result: list):
                     'PCODE': item_code,
                     'PRICE': price_list_rate,
                     'LINETYPE': 'N',
-                    'QTY': row.get('quantity', 0.0),
-                    'GROSS': row.get('total_amount', 0.0),
+                    'QTY': abs(row.get('quantity', 0.0)),
+                    'GROSS': abs(row.get('total_amount', 0.0)),
 
                     'DISC_ID1': "",
                     'DISC_PRINCIPAL_PCT1': 0.0,
@@ -453,18 +453,18 @@ def group_details_by_order_id(query_result: list):
                     'DISC_DIST_PCT6': 0.0,
                     'DISC_DIST_VAL6': 0.0,
 
-                    'TAX_AMT': row.get('tax_amount', 0.0),
-                    'NET': row.get('amount', 0.0),
+                    'TAX_AMT': abs(row.get('tax_amount', 0.0)),
+                    'NET': abs(row.get('amount', 0.0)),
                     'DISC_TOTAL': 0.0
                 }
 
             # kalau item_code sudah ada → SUM
             else:
                 item = grouped_detail[order_id][item_code]
-                item['QTY'] += row.get('quantity', 0.0)
-                item['GROSS'] += row.get('total_amount', 0.0)
-                item['TAX_AMT'] += row.get('tax_amount', 0.0)
-                item['NET'] += row.get('amount', 0.0)
+                item['QTY'] += abs(row.get('quantity', 0.0))
+                item['GROSS'] += abs(row.get('total_amount', 0.0))
+                item['TAX_AMT'] += abs(row.get('tax_amount', 0.0))
+                item['NET'] += abs(row.get('amount', 0.0))
 
         # convert dict → list (biar sama kayak sebelumnya)
         for order_id in grouped_detail:
@@ -708,8 +708,11 @@ def get_unique_so_ref(payloads:list):
             so_refs.add(so_ref)
     return list(so_refs)
 
-def create_update_invoice_payload_dn_rdo(order_ref:str,start_date:str,end_date:str):
+def create_update_invoice_payload_dn(order_ref:str,start_date:str,end_date:str,cancel:bool=False):
     sql_condition = f"AND dii.against_sales_order = '{order_ref}'" if order_ref else ""
+    is_return = 0
+    if cancel:
+        is_return = 1
     query = f"""
         SELECT
             dii.parent AS dn,
@@ -724,7 +727,7 @@ def create_update_invoice_payload_dn_rdo(order_ref:str,start_date:str,end_date:s
             CAST(
                 COALESCE(
                     (dii.rate / pi_totals.total_qty) * pi.qty,
-                    dii.rate * (dii.qty * -1)
+                    dii.rate * (dii.qty)
                 ) * 0.11
                 AS DECIMAL(20,4)
             ) AS tax_amount,
@@ -732,7 +735,7 @@ def create_update_invoice_payload_dn_rdo(order_ref:str,start_date:str,end_date:s
             CAST(
                 COALESCE(
                     (dii.rate / pi_totals.total_qty) * pi.qty,
-                    dii.rate * (dii.qty * -1)
+                    dii.rate * (dii.qty)
                 ) * 1.11
                 AS DECIMAL(20,4)
             ) AS amount,
@@ -749,7 +752,7 @@ def create_update_invoice_payload_dn_rdo(order_ref:str,start_date:str,end_date:s
             CAST(
                 COALESCE(
                     (dii.rate / pi_totals.total_qty) * pi.qty,
-                    dii.rate * (dii.qty * -1)
+                    dii.rate * (dii.qty)
                 ) AS DECIMAL(20,4)
             ) AS total_amount,
 
@@ -799,13 +802,13 @@ def create_update_invoice_payload_dn_rdo(order_ref:str,start_date:str,end_date:s
         AND pi_totals.parent_item = dii.item_code
 
         LEFT JOIN logs.erpnext_arbi_titipaja_api_log api_log
-            ON api_log.po_no = so.po_no
-        AND api_log.title = 'Price Detail'
-        AND api_log.created_at = (
-                SELECT MAX(l2.created_at)
-                FROM logs.erpnext_arbi_titipaja_api_log l2
-                WHERE l2.po_no = so.po_no
-                AND l2.title = 'Price Detail'
+        ON api_log.id = (
+            SELECT l2.id
+            FROM logs.erpnext_arbi_titipaja_api_log l2
+            WHERE l2.po_no = so.po_no
+            AND l2.title = 'Price Detail'
+            ORDER BY l2.created_at DESC, l2.id DESC
+            LIMIT 1
         )
 
         LEFT JOIN `tabItem` it
@@ -813,7 +816,8 @@ def create_update_invoice_payload_dn_rdo(order_ref:str,start_date:str,end_date:s
 
         WHERE DATE(dii.modified) BETWEEN '{start_date}' AND '{end_date}'
         AND dii.against_sales_order IS NOT NULL
-        AND dn.is_return = 1
+        AND dn.docstatus = 1
+        AND dn.is_return = {is_return}
         {sql_condition}
         AND dii.brand = 'Kino';
     """
@@ -933,7 +937,7 @@ def ids_post_invoice(data_dict: dict):
         if order_ref:
             print("insert so")
             for order in order_ref:
-                raw_payloads = create_post_invoice_payload(
+                raw_payloads = create_update_invoice_payload_dn(
                     order_ref=order,
                     start_date=start_date,
                     end_date=end_date
@@ -944,7 +948,7 @@ def ids_post_invoice(data_dict: dict):
                     worker_send_invoice(raw_payloads=raw_payloads)
         else:
             print("insert so")
-            raw_payloads = create_post_invoice_payload(
+            raw_payloads = create_update_invoice_payload_dn(
                 order_ref=None,
                 start_date=start_date,
                 end_date=end_date
@@ -958,10 +962,11 @@ def ids_post_invoice(data_dict: dict):
         if order_ref:
             print("cancel RDO")
             for order in order_ref:
-                raw_payloads = create_update_invoice_payload_dn_rdo(
+                raw_payloads = create_update_invoice_payload_dn(
                     order_ref=order,
                     start_date=start_date,
-                    end_date=end_date
+                    end_date=end_date,
+                    cancel=True
                 )
                 # for test
                 # raw_payloads = mock_data_rdo()
@@ -969,10 +974,11 @@ def ids_post_invoice(data_dict: dict):
                     worker_send_invoice(raw_payloads=raw_payloads,is_cancel=True)
         else:
             print("cancel RDO")
-            raw_payloads=create_update_invoice_payload_dn_rdo(
+            raw_payloads = create_update_invoice_payload_dn(
                 order_ref=None,
                 start_date=start_date,
-                end_date=end_date
+                end_date=end_date,
+                cancel=True
             )
             # for test 
             # raw_payloads = mock_data_rdo()
@@ -1092,7 +1098,7 @@ def ids_post_invoice(data_dict: dict):
 #             "response": err_text
 #         })
 
-def get_all_balance_kino_item(item_code: str = None, warehouse: str = None):
+def get_all_balance_kino_item(item_code: str = None, warehouse: str = None,to_date:str=None):
     conditions = """
         WHERE it.brand = 'KINO'
         AND sle.docstatus = 1
@@ -1108,18 +1114,29 @@ def get_all_balance_kino_item(item_code: str = None, warehouse: str = None):
     if warehouse:
         conditions += " AND sle.warehouse = %s"
         params.append(warehouse)
+    
+    if to_date:
+        conditions+= " AND sle.posting_date <= %s"
+        params.append(to_date)
 
     query = f"""
+    SELECT 
+    x.item_code,
+    x.warehouse,
+    SUM(x.actual_qty) as balance,
+    x.sub_brand
+	FROM(
         SELECT
             sle.item_code,
             sle.warehouse,
-            SUM(sle.actual_qty) AS balance,
+            sle.actual_qty,
+            sle.posting_date,
             it.sub_brand
         FROM `tabStock Ledger Entry` sle
         INNER JOIN `tabItem` it ON it.name = sle.item_code
         {conditions}
-        GROUP BY sle.item_code, sle.warehouse
-        HAVING balance <> 0
+       )x
+    GROUP BY x.warehouse,x.item_code
     """
     return execute_query_fetch(query=query, params=tuple(params))
 
@@ -1135,7 +1152,7 @@ def get_warehouse_mapping():
         raise Exception("Please Set Kino Warehouse Mapping")
 
 
-def create_stock_payload(item_code: str = None, warehouse: str = None):
+def create_stock_payload(item_code: str = None, warehouse: str = None,date:str=None):
     header_maxlife = {
         "INTERFACEID": "T006",
         "CLIENTID": get_kino_config(maxlife=True).get("kino_client_id"),
@@ -1155,7 +1172,8 @@ def create_stock_payload(item_code: str = None, warehouse: str = None):
     try:
         kino_stock_balance = get_all_balance_kino_item(
             item_code=item_code,
-            warehouse=warehouse
+            warehouse=warehouse,
+            to_date=date
         )
         print(kino_stock_balance)
         print("kino stock balance\n")
@@ -1215,7 +1233,7 @@ def safe_response_json(response):
     except ValueError:
         return None
 
-def post_stock(data: KinoPostStock = None):
+def post_stock(data: KinoPostStock = None,date:str=None):
     print("run post stock\n")
     try:
         item_code = None
@@ -1223,7 +1241,7 @@ def post_stock(data: KinoPostStock = None):
         if data:
             item_code = data.get('item_code',None)
             warehouse = data.get('warehouse',None)
-        header_maxlife, header_without_maxlife = create_stock_payload(item_code = item_code,warehouse=warehouse)
+        header_maxlife, header_without_maxlife = create_stock_payload(item_code = item_code,warehouse=warehouse,date=date)
         # for test only
         # header_maxlife= mock_post_stock_maxlife()
         # header_without_maxlife = mock_post_stock_non_maxlife()
