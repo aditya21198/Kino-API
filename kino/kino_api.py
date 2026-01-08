@@ -1098,7 +1098,7 @@ def ids_post_invoice(data_dict: dict):
 #             "response": err_text
 #         })
 
-def get_all_balance_kino_item(item_code: str = None, warehouse: str = None):
+def get_all_balance_kino_item(item_code: str = None, warehouse: str = None,to_date:str=None):
     conditions = """
         WHERE it.brand = 'KINO'
         AND sle.docstatus = 1
@@ -1114,18 +1114,29 @@ def get_all_balance_kino_item(item_code: str = None, warehouse: str = None):
     if warehouse:
         conditions += " AND sle.warehouse = %s"
         params.append(warehouse)
+    
+    if to_date:
+        conditions+= " AND sle.posting_date <= %s"
+        params.append(to_date)
 
     query = f"""
+    SELECT 
+    x.item_code,
+    x.warehouse,
+    SUM(x.actual_qty) as balance,
+    x.sub_brand
+	FROM(
         SELECT
             sle.item_code,
             sle.warehouse,
-            SUM(sle.actual_qty) AS balance,
+            sle.actual_qty,
+            sle.posting_date,
             it.sub_brand
         FROM `tabStock Ledger Entry` sle
         INNER JOIN `tabItem` it ON it.name = sle.item_code
         {conditions}
-        GROUP BY sle.item_code, sle.warehouse
-        HAVING balance <> 0
+       )x
+    GROUP BY x.warehouse,x.item_code
     """
     return execute_query_fetch(query=query, params=tuple(params))
 
@@ -1141,7 +1152,7 @@ def get_warehouse_mapping():
         raise Exception("Please Set Kino Warehouse Mapping")
 
 
-def create_stock_payload(item_code: str = None, warehouse: str = None):
+def create_stock_payload(item_code: str = None, warehouse: str = None,date:str=None):
     header_maxlife = {
         "INTERFACEID": "T006",
         "CLIENTID": get_kino_config(maxlife=True).get("kino_client_id"),
@@ -1161,7 +1172,8 @@ def create_stock_payload(item_code: str = None, warehouse: str = None):
     try:
         kino_stock_balance = get_all_balance_kino_item(
             item_code=item_code,
-            warehouse=warehouse
+            warehouse=warehouse,
+            to_date=date
         )
         print(kino_stock_balance)
         print("kino stock balance\n")
@@ -1221,7 +1233,7 @@ def safe_response_json(response):
     except ValueError:
         return None
 
-def post_stock(data: KinoPostStock = None):
+def post_stock(data: KinoPostStock = None,date:str=None):
     print("run post stock\n")
     try:
         item_code = None
@@ -1229,7 +1241,7 @@ def post_stock(data: KinoPostStock = None):
         if data:
             item_code = data.get('item_code',None)
             warehouse = data.get('warehouse',None)
-        header_maxlife, header_without_maxlife = create_stock_payload(item_code = item_code,warehouse=warehouse)
+        header_maxlife, header_without_maxlife = create_stock_payload(item_code = item_code,warehouse=warehouse,date=date)
         # for test only
         # header_maxlife= mock_post_stock_maxlife()
         # header_without_maxlife = mock_post_stock_non_maxlife()
