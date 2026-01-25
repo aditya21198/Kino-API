@@ -13,10 +13,10 @@ def mock_data():
                 "CUST_CODE2": "OLKINO005",
                 "SALESMAN_CODE": "3430LO5101",
                 "INV_TYPE": "INV02",
-                "ORDER_REF": "SO-ARB-25-00028260-TEST",
+                "ORDER_REF": "SO-ARBT-25-00028260",
                 "ORDER_DATE": "2025-11-01",
                 "SFA_TGLORDER": "2025-11-01",
-                "SFA_ORDERNO": "SO-ARB-25-00028260-TEST",
+                "SFA_ORDERNO": "SO-ARBT-25-00028260",
                 "SFA_SLSNO": "3430LO5101",
                 "DETAIL": [
                 {
@@ -75,10 +75,10 @@ def mock_data():
                 "CUST_CODE2": "OLKINO006",
                 "SALESMAN_CODE": "3430LO5101",
                 "INV_TYPE": "INV02",
-                "ORDER_REF": "SO-ARB-25-00028488-TEST",
+                "ORDER_REF": "SO-ARBT-25-00028488",
                 "ORDER_DATE": "2025-11-01",
                 "SFA_TGLORDER": "2025-11-01",
-                "SFA_ORDERNO": "SO-ARB-25-00028488-TEST",
+                "SFA_ORDERNO": "SO-ARBT-25-00028488",
                 "SFA_SLSNO": "3430LO5101",
                 "DETAIL": [
                 {
@@ -127,3 +127,30 @@ def mock_data():
         }
     ]
     return payloads
+
+def mock_post_stock_maxlife():
+    return {
+        "INTERFACEID": "T006",
+        "CLIENTID": "33",
+        "DATA": [
+            {
+                "DETAIL": [
+                    {"PRDCODE": "601004", "WHLOC1": "4001", "WHLOC2": "01", "QTY": 197}
+                ]
+            }
+        ]
+    }
+
+def mock_post_stock_non_maxlife():
+    return     {
+        "INTERFACEID": "T006",
+        "CLIENTID": "33",
+        "DATA": [
+            {
+                "DETAIL": [
+                    {"PRDCODE": "101001", "WHLOC1": "4001", "WHLOC2": "01", "QTY": 95}
+                
+                ]
+            }
+        ]
+    }

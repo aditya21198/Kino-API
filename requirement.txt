@@ -6,5 +6,5 @@ apscheduler
 requests
 python-dotenv
 sqlalchemy
-psycopg2-binary
 pymysql
+pytz

@@ -50,6 +50,22 @@ def make_db_connection(is_logger=False):
 
     return SessionLocal, Base
 
+def update_table(query:str,is_logger=False):
+    SessionLocal, _ = make_db_connection(is_logger=is_logger)
+    db = SessionLocal()
+    try:
+        raw = db.connection().connection
+        cursor = raw.cursor()
+        cursor.execute(query)
+        raw.commit()
+        cursor.close()
+        return True
+    except Exception:
+        print("DB Error:", traceback.format_exc())
+        return False
+    finally:
+        db.close()
+
 def execute_query_fetch(query: str, params: tuple = (), is_logger=False):
     SessionLocal, _ = make_db_connection(is_logger=is_logger)
     db = SessionLocal()

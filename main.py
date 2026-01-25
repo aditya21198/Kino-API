@@ -1,26 +1,11 @@
 import sys, os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi import FastAPI, BackgroundTasks
-from models import ManualPostInvoiceKino
-from services import end_of_month_job
-from kino.kino_api import ids_post_invoice
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.cron import CronTrigger
+from models import ManualPostInvoiceKino,KinoPostStock
+from services import end_of_month_job,end_of_the_day_invoice_job
+from kino.kino_api import ids_post_invoice,post_stock
 
 app = FastAPI()
-
-scheduler = AsyncIOScheduler()
-scheduler.start()
-
-
-# CRON JOB: Jalan tiap akhir bulan jam 23:59
-scheduler.add_job(
-    end_of_month_job,
-    CronTrigger(day="last", hour=23, minute=59),
-    id="monthly_job",
-    replace_existing=True
-)
-
 
 @app.post("/submit-order")
 async def submit_order(payload: ManualPostInvoiceKino, background_tasks: BackgroundTasks):
@@ -30,6 +15,15 @@ async def submit_order(payload: ManualPostInvoiceKino, background_tasks: Backgro
     # Add to background job
     background_tasks.add_task(ids_post_invoice, data_dict)
 
+    return {
+        "status": "processing",
+        "message": "Request accepted and is being processed in background."
+    }
+
+@app.post("/post-stock")
+async def ids_post_stock(payload: KinoPostStock,background_tasks:BackgroundTasks):
+    data_dict = payload.dict()
+    background_tasks.add_task(post_stock, data_dict)
     return {
         "status": "processing",
         "message": "Request accepted and is being processed in background."

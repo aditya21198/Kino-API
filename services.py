@@ -1,9 +1,9 @@
 import sys, os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import requests
-from datetime import datetime
+from datetime import datetime,timedelta
 import calendar
-from kino.kino_api import ids_post_invoice
+from kino.kino_api import ids_post_invoice,post_stock
 from fastapi import FastAPI, BackgroundTasks
 
 def get_start_and_last_day_of_the_month():
@@ -28,3 +28,15 @@ def end_of_month_job():
         "END_DATE": end_str
     }
     ids_post_invoice(data_dict=payload)
+
+def end_of_the_day_invoice_job():
+    yesterday = datetime.now() - timedelta(days=1)
+    transaction_date = yesterday.date().strftime("%Y-%m-%d")
+    payload = {
+        "START_DATE":transaction_date,
+        "END_DATE":transaction_date
+    }
+    ids_post_invoice(data_dict=payload)
+
+def end_of_the_day_stock_job():
+    post_stock()
