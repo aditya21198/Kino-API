@@ -120,7 +120,7 @@ def login(maxlife=False):
                 "scope": "*"
             },
             headers={"Content-Type": "application/x-www-form-urlencoded"},
-            timeout=60
+            timeout=(5,10)
         )
         response.raise_for_status()
 
@@ -661,7 +661,7 @@ def send_single_invoice(payload: json,is_cancel:bool=False):
         "Authorization": f"Bearer {token}"
     }
     try:
-        response = requests.post(url, json=data[0], headers=headers)
+        response = requests.post(url, json=data[0], headers=headers,timeout=(5,20))
 
         log_data = {
             "url": url,
@@ -1263,7 +1263,8 @@ def post_stock(data: KinoPostStock = None,date:str=None):
                 response = requests.post(
                     url,
                     json=header_maxlife,
-                    headers=headers
+                    headers=headers,
+                    timeout=(5,20)
                 )
                 full_response_text = json.dumps(response.text) or ""
                 resp_json = safe_response_json(response)
@@ -1308,7 +1309,8 @@ def post_stock(data: KinoPostStock = None,date:str=None):
                 response = requests.post(
                     url,
                     json=header_without_maxlife,
-                    headers=headers
+                    headers=headers,
+                    timeout=(5,20)
                 )
                 full_response_text = json.dumps(response.text) or ""
 
