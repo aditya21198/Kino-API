@@ -41,4 +41,9 @@ def end_of_the_day_invoice_job():
 def end_of_the_day_stock_job():
     yesterday = datetime.now() - timedelta(days=1)
     transaction_date = yesterday.date().strftime("%Y-%m-%d")
-    post_stock(date=transaction_date)
+    post_stock_param ={
+        "date":transaction_date,
+        "item_code":None,
+        "warehouse":None
+    }
+    post_stock(data=post_stock_param)
