@@ -512,8 +512,8 @@ def create_post_invoice_payload(order_ref:str = None,start_date:str = None,end_d
         conditions.append(f"AND calc.name = '{order_ref}'")
     
     if start_date and end_date:
-        condittion_start_date_end_date.append(f"AND DATE(so.modified) >= '{start_date}'")
-        condittion_start_date_end_date.append(f"AND DATE(so.modified) <= '{end_date}'")
+        condittion_start_date_end_date.append(f"AND so.transaction_date >= '{start_date}'")
+        condittion_start_date_end_date.append(f"AND so.transaction_date <= '{end_date}'")
 
     condition_sql = " ".join(conditions) if conditions else ""
     condition_transaction_date_sql = " ".join(condittion_start_date_end_date) if condittion_start_date_end_date else ""
@@ -720,6 +720,7 @@ def create_update_invoice_payload_dn(order_ref:str,start_date:str,end_date:str,c
             so.po_no,
             so.grand_total,
             so.transaction_date,
+            DATE(dii.modified) as modified_date,
 
             COALESCE(pi.parent_item, '') AS master_bundle_item,
             COALESCE(pi.item_code, dii.item_code) AS item_code,
@@ -1233,14 +1234,16 @@ def safe_response_json(response):
     except ValueError:
         return None
 
-def post_stock(data: KinoPostStock = None,date:str=None):
+def post_stock(data: KinoPostStock = None):
     print("run post stock\n")
     try:
         item_code = None
         warehouse = None
+        date=None
         if data:
             item_code = data.get('item_code',None)
             warehouse = data.get('warehouse',None)
+            date=data.get('date',None)
         header_maxlife, header_without_maxlife = create_stock_payload(item_code = item_code,warehouse=warehouse,date=date)
         # for test only
         # header_maxlife= mock_post_stock_maxlife()
@@ -1405,14 +1408,47 @@ def render_payload_to_json(payload, filename=None):
 
     return filename
 
+def get_all_date_in_range(start_date:str,end_date:str):
+    start = datetime.strptime(start_date, "%Y-%m-%d").date()
+    end = datetime.strptime(end_date, "%Y-%m-%d").date()
+
+    dates = [
+        (start + timedelta(days=i)).strftime("%Y-%m-%d")
+        for i in range((end - start).days + 1)
+    ]
+    return dates
+
+def manual_send_data(data_dict:dict):
+    order_ref = data_dict.get('order_ref')
+    start_date = data_dict.get('start_date')
+    end_date = data_dict.get('end_date')
+    item_code = data_dict.get('item_code')
+    warehouse = data_dict.get('warehouse')
+    list_date_from_range = get_all_date_in_range(start_date=start_date,end_date=end_date)
+    for date in list_date_from_range:
+        # post stock daily
+        post_stock_param = KinoPostStock(
+            date=date,
+            item_code=item_code,
+            warehouse=warehouse
+        )
+        post_invoice_param={
+            'ORDER_REF':order_ref,
+            'START_DATE':date,
+            'END_DATE':date
+        }
+        post_stock(post_stock_param)
+        ids_post_invoice(post_invoice_param)
+
+
 # Generate Excel
 if __name__ == '__main__':
     try:
         print("running_create excel\n")
         raw = create_post_invoice_payload(
             order_ref=None,
-            start_date='2025-12-21',
-            end_date='2025-12-31'
+            start_date='2026-01-01',
+            end_date='2026-01-31'
         )
 
         payload = build_payload(raw)

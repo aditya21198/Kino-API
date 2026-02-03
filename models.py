@@ -9,3 +9,11 @@ class ManualPostInvoiceKino(BaseModel):
 class KinoPostStock(BaseModel):
     item_code:Optional[str]
     warehouse:Optional[str]
+    date:Optional[str]=None
+
+class ManualSendData(BaseModel):
+    order_ref:Optional[list]=None
+    start_date:Optional[str]=None
+    end_date:Optional[str]=None
+    item_code:Optional[str]=None
+    warehouse:Optional[str]=None
