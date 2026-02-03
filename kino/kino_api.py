@@ -1418,6 +1418,142 @@ def get_all_date_in_range(start_date:str,end_date:str):
     ]
     return dates
 
+def manual_ids_post_invoice(data_dict: dict):
+    order_ref = data_dict.get('ORDER_REF')
+    start_date = data_dict.get('START_DATE')
+    end_date = data_dict.get('END_DATE')
+    try:
+        # send first sales order
+        if order_ref:
+            print("insert so")
+            for order in order_ref:
+                raw_payloads = create_update_invoice_payload_dn(
+                    order_ref=order,
+                    start_date=start_date,
+                    end_date=end_date
+                )
+                # for test
+                # raw_payloads = mock_data_so()
+                if raw_payloads:
+                    manual_send_invoice(raw_payloads=raw_payloads)
+        else:
+            print("insert so")
+            raw_payloads = create_update_invoice_payload_dn(
+                order_ref=None,
+                start_date=start_date,
+                end_date=end_date
+            )
+            # for test
+            # raw_payloads = mock_data_so()
+            if raw_payloads:
+                manual_send_invoice(raw_payloads=raw_payloads)
+        
+        # RDO invoice
+        if order_ref:
+            print("cancel RDO")
+            for order in order_ref:
+                raw_payloads = create_update_invoice_payload_dn(
+                    order_ref=order,
+                    start_date=start_date,
+                    end_date=end_date,
+                    cancel=True
+                )
+                # for test
+                # raw_payloads = mock_data_rdo()
+                if raw_payloads:
+                    manual_send_invoice(raw_payloads=raw_payloads,is_cancel=True)
+        else:
+            print("cancel RDO")
+            raw_payloads = create_update_invoice_payload_dn(
+                order_ref=None,
+                start_date=start_date,
+                end_date=end_date,
+                cancel=True
+            )
+            # for test 
+            # raw_payloads = mock_data_rdo()
+            if raw_payloads:
+                manual_send_invoice(raw_payloads=raw_payloads,is_cancel=True)
+        
+        # Cancel SO
+        if order_ref:
+            print("cancel so")
+            for order in order_ref:
+                raw_payloads = create_post_invoice_payload(
+                    order_ref=order,
+                    start_date=start_date,
+                    end_date=end_date,
+                    is_cancel=True
+                )
+                # for test
+                # raw_payloads = mock_data_cancel_so()
+                if raw_payloads:
+                    manual_send_invoice(raw_payloads=raw_payloads,is_cancel=True)
+        else:
+            print("cancel so")
+            raw_payloads = create_post_invoice_payload(
+                order_ref=None,
+                start_date=start_date,
+                end_date=end_date,
+                is_cancel=True
+            )
+            # for test
+            # raw_payloads = mock_data_cancel_so()
+            if raw_payloads:
+                manual_send_invoice(raw_payloads=raw_payloads,is_cancel=True)
+
+    except Exception:
+        err_text = traceback.format_exc()
+        logger.log({
+            "url": None,
+            "title": "INVOICE_ERROR",
+            "order_ref": None,
+            "method": "POST",
+            "status_code": 500,
+            "kino_status": None,
+            "request": None,
+            "response": err_text
+        })
+
+def manual_send_invoice(raw_payloads,is_cancel):
+    grouped = {}
+    for row in raw_payloads:
+        so_ref = row.get('name')
+        if not so_ref:
+            continue
+        grouped.setdefault(so_ref, []).append(row)
+    for so_ref,rows in grouped.items():
+        try: 
+            payload = build_payload(rows,is_cancel=is_cancel)
+            print(payload)
+            if is_cancel:
+                latest_increment = get_last_cancelled_order_ref_name(order_ref=so_ref)
+                if latest_increment:
+                    new_order_ref = increment_name(order_ref=latest_increment[0]['order_ref'])
+                    payload[0]['DATA'][0]['ORDER_REF'] = new_order_ref
+                    payload[0]['DATA'][0]['SFA_ORDERNO'] = new_order_ref
+                else:
+                    new_order_ref = increment_name(order_ref=so_ref)
+                    payload[0]['DATA'][0]['ORDER_REF'] = new_order_ref
+                    payload[0]['DATA'][0]['SFA_ORDERNO'] = new_order_ref
+                cancel_order = check_cancelled_invoice(order_ref=so_ref)
+                if not cancel_order:
+                    send_single_invoice(payload,is_cancel=is_cancel)
+            else:
+                send_single_invoice(payload)
+        except Exception as error:
+            err_text = traceback.format_exc()
+            logger.log({
+                "url": None,
+                "title": "INVOICE_ERROR",
+                "order_ref": so_ref,
+                "method": "POST",
+                "status_code": 500,
+                "kino_status": None,
+                "request": None,
+                "response": err_text
+            })
+
 def manual_send_data(data_dict:dict):
     order_ref = data_dict.get('order_ref')
     start_date = data_dict.get('start_date')
@@ -1438,7 +1574,7 @@ def manual_send_data(data_dict:dict):
             'END_DATE':date
         }
         post_stock(post_stock_param)
-        ids_post_invoice(post_invoice_param)
+        manual_ids_post_invoice(post_invoice_param)
 
 
 # Generate Excel
