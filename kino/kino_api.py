@@ -1234,7 +1234,7 @@ def safe_response_json(response):
     except ValueError:
         return None
 
-def post_stock(data: KinoPostStock = None):
+def post_stock(data:dict = None):
     print("run post stock\n")
     try:
         item_code = None
@@ -1427,11 +1427,11 @@ def manual_send_data(data_dict:dict):
     list_date_from_range = get_all_date_in_range(start_date=start_date,end_date=end_date)
     for date in list_date_from_range:
         # post stock daily
-        post_stock_param = KinoPostStock(
-            date=date,
-            item_code=item_code,
-            warehouse=warehouse
-        )
+        post_stock_param ={
+            "date":date,
+            "item_code":item_code,
+            "warehouse":warehouse
+        }
         post_invoice_param={
             'ORDER_REF':order_ref,
             'START_DATE':date,
