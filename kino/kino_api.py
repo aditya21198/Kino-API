@@ -766,7 +766,7 @@ def create_update_invoice_payload_dn(order_ref:str,start_date:str,end_date:str,c
             ON dn.name = dni.parent
         
         LEFT JOIN aladdin.`tabPacked Item` pi 
-            ON pi.parent = so.name 
+            ON pi.parent = dni.parent 
             AND pi.parent_detail_docname = dni.name
 
 
