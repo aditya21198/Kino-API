@@ -557,7 +557,7 @@ def create_post_invoice_payload(order_ref:str = None,start_date:str = None,end_d
                 WHEN pi.item_code IS NOT NULL THEN 
                     ((soi.price_list_rate * soi.qty) / NULLIF(bundle_sum.total_pcs_in_this_row, 0))
                 ELSE 
-                    soi.rate 
+                    soi.price_list_rate 
             END AS harga_jual_satuan,
             soi.price_list_rate,
 
@@ -737,7 +737,7 @@ def create_update_invoice_payload_dn(order_ref:str,start_date:str,end_date:str,c
                 WHEN pi.item_code IS NOT NULL THEN 
                     ((dni.price_list_rate * dni.qty) / NULLIF(bundle_sum.total_pcs_in_this_row, 0))
                 ELSE 
-                    dni.rate 
+                    dni.price_list_rate 
             END AS harga_jual_satuan,
             dni.price_list_rate,
 
