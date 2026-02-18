@@ -5,7 +5,7 @@ from models import KinoPostStock
 from dotenv import load_dotenv
 import os
 from datetime import datetime,timedelta,date
-from database import execute_query_fetch,get_price_list,update_table
+from database import execute_query_fetch,get_price_list, make_db_connection,update_table
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
@@ -19,6 +19,7 @@ from threading import Lock
 LOGIN_LOCK = Lock()
 
 logger = KinoLogger("kino_api_logs")
+providers_table = KinoLogger('kino_api_providers')
 
 load_dotenv()
 
@@ -614,6 +615,14 @@ def create_post_invoice_payload(order_ref:str = None,start_date:str = None,end_d
     """
     try:
         result = execute_query_fetch(query=query)
+        for row in result:
+            item_code = row.get("item_code")
+            if item_code:
+                dbp_price = select_dbp_price(item_code)
+                if dbp_price is not None:
+                    row["price_list_rate_dbp"] = dbp_price
+        # add data to providers table
+        providers_table.log_bulk(result)
         # payloads = build_payload(result=result)
         # for test
         # payloads = mock_data()
@@ -691,6 +700,64 @@ def get_unique_so_ref(payloads:list):
         if so_ref:
             so_refs.add(so_ref)
     return list(so_refs)
+
+
+def select_dbp_price(item_code: str):
+
+    global DBP_CACHE_LOADED
+
+    if not DBP_CACHE_LOADED:
+        with DBP_LOCK:
+            if not DBP_CACHE_LOADED:  # double check
+                load_dbp_cache()
+
+    return DBP_PRICE_CACHE.get(item_code)
+
+DBP_PRICE_CACHE = {}
+DBP_CACHE_LOADED = False
+DBP_LOCK = Lock()
+
+
+def load_dbp_cache():
+    global DBP_PRICE_CACHE, DBP_CACHE_LOADED
+
+    SessionLocal, _ = make_db_connection(is_asi=True)
+    db = SessionLocal()
+
+    try:
+        raw = db.connection().connection
+        cursor = raw.cursor()
+
+        query = """
+            SELECT ip.item_code, ip.price_list_rate, ip.valid_from
+            FROM `tabItem Price` ip
+            INNER JOIN (
+                SELECT item_code, MAX(valid_from) as max_valid_from
+                FROM `tabItem Price`
+                WHERE price_list = 'DBP'
+                AND brand = 'Kino'
+                AND valid_from <= %s
+                GROUP BY item_code
+            ) latest
+            ON ip.item_code = latest.item_code
+            AND ip.valid_from = latest.max_valid_from
+            WHERE ip.price_list = 'DBP'
+            AND ip.brand = 'Kino'
+        """
+
+        cursor.execute(query)
+        rows = cursor.fetchall()
+
+        DBP_PRICE_CACHE = {
+            item_code: price
+            for item_code, price in rows
+        }
+
+        DBP_CACHE_LOADED = True
+
+    finally:
+        cursor.close()
+        db.close()
 
 def create_update_invoice_payload_dn(order_ref:str,start_date:str,end_date:str,cancel:bool=False):
     sql_condition = f"AND dni.against_sales_order = '{order_ref}'" if order_ref else ""
@@ -799,6 +866,13 @@ def create_update_invoice_payload_dn(order_ref:str,start_date:str,end_date:str,c
     print(query)
     result = execute_query_fetch(query=query)
     if result:
+        for row in result:
+            item_code = row.get("item_code")
+            if item_code:
+                dbp_price = select_dbp_price(item_code)
+                if dbp_price is not None:
+                    row["price_list_rate_dbp"] = dbp_price
+        providers_table.log_bulk(result)
         return result
 
 

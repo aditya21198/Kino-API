@@ -9,20 +9,42 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 #Load env
 load_dotenv()
 
-DB_USER = os.getenv("DB_USER")
-DB_PASS = os.getenv("DB_PASS")
-DB_HOST = os.getenv("DB_HOST")
-DB_PORT = os.getenv("DB_PORT")
-DB_NAME = os.getenv("DB_NAME")
-DB_LOGGER_NAME = os.getenv("DB_LOG_NAME")
+# DB_USER = os.getenv("DB_USER")
+# DB_PASS = os.getenv("DB_PASS")
+# DB_HOST = os.getenv("DB_HOST")
+# DB_PORT = os.getenv("DB_PORT")
+# DB_NAME = os.getenv("DB_NAME")
+# DB_LOGGER_NAME = os.getenv("DB_LOG_NAME")
 
 # Global engine/session holder
 ENGINES = {}
 SESSIONS = {}
 BASES = {}
 
-def make_db_connection(is_logger=False):
-    key = "logger" if is_logger else "main"
+def make_db_connection(is_logger=False,is_asi=False):
+    if is_asi:
+        DB_USER = os.getenv("DB_USER_ASI")
+        DB_PASS = os.getenv("DB_PASS_ASI")
+        DB_HOST = os.getenv("DB_HOST_ASI")
+        DB_PORT = os.getenv("DB_PORT_ASI")
+        DB_NAME = os.getenv("DB_NAME_ASI")
+        DB_LOGGER_NAME = os.getenv("DB_LOG_NAME_ASI")
+    else:
+        DB_USER = os.getenv("DB_USER")
+        DB_PASS = os.getenv("DB_PASS")
+        DB_HOST = os.getenv("DB_HOST")
+        DB_PORT = os.getenv("DB_PORT")
+        DB_NAME = os.getenv("DB_NAME")
+        DB_LOGGER_NAME = os.getenv("DB_LOG_NAME")
+    
+    if is_logger:
+        key = 'logger'
+    if is_asi:
+        key = 'asi'
+    if not is_logger and not is_asi:
+        key = 'main'
+
+    # key = "logger" if is_logger else "main"
 
     # return existing connection
     if key in SESSIONS:
@@ -50,8 +72,8 @@ def make_db_connection(is_logger=False):
 
     return SessionLocal, Base
 
-def update_table(query:str,is_logger=False):
-    SessionLocal, _ = make_db_connection(is_logger=is_logger)
+def update_table(query:str,is_logger=False,is_asi=False):
+    SessionLocal, _ = make_db_connection(is_logger=is_logger,is_asi=is_asi)
     db = SessionLocal()
     try:
         raw = db.connection().connection
@@ -66,8 +88,8 @@ def update_table(query:str,is_logger=False):
     finally:
         db.close()
 
-def execute_query_fetch(query: str, params: tuple = (), is_logger=False):
-    SessionLocal, _ = make_db_connection(is_logger=is_logger)
+def execute_query_fetch(query: str, params: tuple = (), is_logger=False,is_asi=False):
+    SessionLocal, _ = make_db_connection(is_logger=is_logger,is_asi=is_asi)
     db = SessionLocal()
 
     try:
@@ -76,49 +98,6 @@ def execute_query_fetch(query: str, params: tuple = (), is_logger=False):
         cursor = raw.cursor()
 
         cursor.execute(query, params)
-        rows = cursor.fetchall()
-
-        if not rows:
-            return None
-
-        columns = [col[0] for col in cursor.description]
-
-        result_dict = [
-            {
-                col: float(val) if isinstance(val, Decimal) else val
-                for col, val in zip(columns, row)
-            }
-            for row in rows
-        ]
-
-        cursor.close()
-        return result_dict
-
-    except Exception:
-        print("DB Error:", traceback.format_exc())
-        return None
-
-    finally:
-        db.close()
-
-def get_price_list(item_code: str, price_list: str):
-    SessionLocal, _ = make_db_connection()
-    db = SessionLocal()
-
-    try:
-        raw = db.connection().connection
-        cursor = raw.cursor()
-
-        query = """
-            SELECT valid_from, price_list, currency, price_list_rate
-            FROM `tabItem Price`
-            WHERE item_code = %s
-            AND price_list = %s
-            ORDER BY valid_from DESC
-            LIMIT 1
-        """
-
-        cursor.execute(query, (item_code, price_list))
         rows = cursor.fetchall()
 
         if not rows:
