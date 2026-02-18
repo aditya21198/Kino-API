@@ -4,12 +4,11 @@ import traceback
 from database import make_db_connection
 
 class KinoLogger:
-    def __init__(self, table_name="kino_api_logs", is_logger=True,is_asi=False):
+    def __init__(self, table_name="kino_api_logs", is_logger=True):
         self._table = table_name
         self.is_logger = is_logger
-        self.is_asi = is_asi
 
-        SessionLocal, _ = make_db_connection(is_logger=is_logger,is_asi=is_asi)
+        SessionLocal, _ = make_db_connection(is_logger=is_logger)
         self.SessionLocal = SessionLocal
 
     def ensure_table(self, log_keys):
@@ -172,6 +171,22 @@ class KinoLogger:
             conn.rollback()
             return 0
 
+        finally:
+            cur.close()
+            db.close()
+    
+    def truncate_if_exists(self):
+        db = self.SessionLocal()
+        conn = db.connection().connection
+        cur = conn.cursor()
+
+        try:
+            cur.execute("SHOW TABLES LIKE %s", (self._table,))
+            exists = cur.fetchone()
+
+            if exists:
+                cur.execute(f"TRUNCATE TABLE `{self._table}`")
+                conn.commit()
         finally:
             cur.close()
             db.close()

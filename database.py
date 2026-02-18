@@ -21,7 +21,7 @@ ENGINES = {}
 SESSIONS = {}
 BASES = {}
 
-def make_db_connection(is_logger=False,is_asi=False):
+def make_db_connection(is_logger=False,is_asi=False,is_providers=False):
     if is_asi:
         DB_USER = os.getenv("DB_USER_ASI")
         DB_PASS = os.getenv("DB_PASS_ASI")
@@ -39,9 +39,9 @@ def make_db_connection(is_logger=False,is_asi=False):
     
     if is_logger:
         key = 'logger'
-    if is_asi:
+    elif is_asi:
         key = 'asi'
-    if not is_logger and not is_asi:
+    else:
         key = 'main'
 
     # key = "logger" if is_logger else "main"
