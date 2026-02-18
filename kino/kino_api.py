@@ -874,7 +874,6 @@ def create_update_invoice_payload_dn(order_ref:str,start_date:str,end_date:str,c
                 dbp_price = select_dbp_price(item_code,end_date)
                 if dbp_price is not None:
                     row["price_list_rate_dbp"] = dbp_price
-        providers_table.log_bulk(result)
         return result
 
 

@@ -17,3 +17,9 @@ class ManualSendData(BaseModel):
     end_date:Optional[str]=None
     item_code:Optional[str]=None
     warehouse:Optional[str]=None
+
+class PostInvoiceData(BaseModel):
+    start_date:Optional[str]=None
+    end_date:Optional[str]=None
+    order_ref:Optional[list]=None
+    is_cancel:Optional[bool]=False
