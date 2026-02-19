@@ -720,7 +720,7 @@ def load_dbp_cache(end_date: str):
     global DBP_PRICE_CACHE, DBP_CACHE_LOADED
     try:
         query = """
-            SELECT ip.item_code, ip.price_list_rate, ip.valid_from
+            SELECT ip.item_code, ip.price_list_rate
             FROM `tabItem Price` ip
             INNER JOIN (
                 SELECT item_code, MAX(valid_from) as max_valid_from
