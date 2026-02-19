@@ -5,7 +5,7 @@ from models import KinoPostStock
 from dotenv import load_dotenv
 import os
 from datetime import datetime,timedelta,date
-from database import execute_query_fetch,get_price_list,update_table
+from database import execute_query_fetch,get_price_list, make_db_connection,update_table
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
@@ -19,6 +19,7 @@ from threading import Lock
 LOGIN_LOCK = Lock()
 
 logger = KinoLogger("kino_api_logs")
+providers_table = KinoLogger('kino_api_result')
 
 load_dotenv()
 
@@ -518,118 +519,108 @@ def create_post_invoice_payload(order_ref:str = None,start_date:str = None,end_d
     condition_sql = " ".join(conditions) if conditions else ""
     condition_transaction_date_sql = " ".join(condittion_start_date_end_date) if condittion_start_date_end_date else ""
     query = f"""
+    SELECT
+        calc.name,
+        calc.po_no,
+        calc.transaction_date,
+        calc.grand_total_with_vat,
+        calc.master_bundle_item,
+        calc.item_code,
+        calc.sub_brand,
+        calc.quantity,
+        calc.selling_price_list,
+        calc.price_list_rate,
+        
+        CAST(calc.harga_jual_satuan AS DECIMAL(20,4)) AS harga_jual,
+        
+        CAST(calc.harga_jual_satuan * calc.quantity AS DECIMAL(20,4)) AS total_amount,
+        CAST((calc.harga_jual_satuan * calc.quantity) * 0.11 AS DECIMAL(20,4)) AS tax_amount,
+        CAST((calc.harga_jual_satuan * calc.quantity) * 1.11 AS DECIMAL(20,4)) AS amount,
+        
+        calc.is_bundle_item,
+        calc.store,
+        calc.channel,
+        calc.price_list_rate_dbp,
+        calc.soi_name,
+        calc.pi_name
+    FROM (
         SELECT
-            calc.name,
-            calc.po_no,
-            calc.transaction_date,
-            calc.grand_total AS grand_total_with_vat,
-            calc.master_bundle_item,
-            calc.item_code,
-            calc.sub_brand,
-            calc.quantity,
-            calc.harga_jual,
-            calc.total_amount,
-            CAST(calc.total_amount * 0.11 AS DECIMAL(20,4)) AS tax_amount,
-            CAST(calc.total_amount * 1.11 AS DECIMAL(20,4)) AS amount,
-            calc.is_bundle_item,
-            calc.store,
-            calc.channel,
-            calc.price_list_rate_dbp
-        FROM (
-            SELECT
-                so.name,
-                so.po_no,
-                so.transaction_date,
-                so.grand_total,
-                so.modified,
-                so.docstatus,
-                COALESCE(pi.parent_item, "") AS master_bundle_item,
-                COALESCE(pi.item_code, soi.item_code) AS item_code,
+            so.name,
+            so.po_no,
+            so.transaction_date,
+            so.grand_total AS grand_total_with_vat,
+            so.selling_price_list,
+            COALESCE(pi.parent_item, soi.item_code) AS master_bundle_item,
+            COALESCE(pi.item_code, soi.item_code) AS item_code,
+            COALESCE(pi.qty, soi.qty)-soi.returned_qty AS quantity,
 
-                COALESCE(pi.qty, soi.qty) AS quantity,
+            CASE 
+                WHEN pi.item_code IS NOT NULL THEN 
+                    ((soi.price_list_rate * soi.qty) / NULLIF(bundle_sum.total_pcs_in_this_row, 0))
+                ELSE 
+                    soi.price_list_rate 
+            END AS harga_jual_satuan,
+            soi.price_list_rate,
 
-                CAST(
-                    COALESCE(
-                        soi.rate * pi.qty / pi_totals.total_qty,
-                        soi.rate
-                    ) AS DECIMAL(20,4)
-                ) AS harga_jual,
+            CASE WHEN pi.item_code IS NOT NULL THEN 1 ELSE 0 END AS is_bundle_item,
+            JSON_UNQUOTE(JSON_EXTRACT(api_log.response, '$.data.price[0].store')) AS store,
+            JSON_UNQUOTE(JSON_EXTRACT(api_log.response, '$.data.price[0].channel')) AS channel,
+            it.sub_brand,
+            
+            soi.name AS soi_name,
+            COALESCE(pi.name, 'SINGLE') AS pi_name,
 
-                CAST(
-                    COALESCE(
-                        (soi.rate / pi_totals.total_qty) * pi.qty,
-                        soi.rate * soi.qty
-                    ) AS DECIMAL(20,4)
-                )
-                * (
-                    COALESCE(pi.qty, soi.qty)
-                    / COALESCE(pi.qty, soi.qty)
-                ) AS total_amount,
+            (
+                SELECT ip.price_list_rate
+                FROM aladdin.`tabItem Price` ip
+                WHERE ip.item_code = COALESCE(pi.item_code, soi.item_code)
+                AND ip.price_list = 'DBP'
+                AND ip.valid_from <= so.transaction_date
+                ORDER BY ip.valid_from DESC
+                LIMIT 1
+            ) AS price_list_rate_dbp
 
-                (
-                    SELECT ip.price_list_rate
-                    FROM `tabItem Price` ip
-                    WHERE ip.item_code = COALESCE(pi.item_code, soi.item_code)
-                    AND ip.price_list = 'DBP'
-                    AND ip.valid_from <= so.transaction_date
-                    ORDER BY ip.valid_from DESC
-                    LIMIT 1
-                ) AS price_list_rate_dbp,
+        FROM aladdin.`tabSales Order Item` soi
+        INNER JOIN aladdin.`tabSales Order` so ON soi.parent = so.name
+        
+        LEFT JOIN aladdin.`tabPacked Item` pi 
+            ON pi.parent = so.name 
+            AND pi.parent_detail_docname = soi.name
 
-                CASE
-                    WHEN pi.item_code IS NOT NULL THEN 1
-                    ELSE 0
-                END AS is_bundle_item,
 
-                JSON_UNQUOTE(JSON_EXTRACT(api_log.response, '$.data.price[0].store')) AS store,
-                JSON_UNQUOTE(JSON_EXTRACT(api_log.response, '$.data.price[0].channel')) AS channel,
+        LEFT JOIN (
+            SELECT 
+                parent_detail_docname, 
+                SUM(qty) as total_pcs_in_this_row
+            FROM aladdin.`tabPacked Item`
+            GROUP BY parent_detail_docname
+        ) bundle_sum ON bundle_sum.parent_detail_docname = soi.name
 
-                soi.idx,
-                it.sub_brand,
-                COALESCE(pi.idx, 0) AS pi_idx
-
-            FROM aladdin.`tabSales Order Item` soi
-            INNER JOIN aladdin.`tabSales Order` so
-                ON soi.parent = so.name
-
-            LEFT JOIN aladdin.`tabPacked Item` pi
-                ON pi.parent = so.name
-                AND pi.parent_item = soi.item_code
-                
-            LEFT JOIN aladdin.`tabItem` it
-                ON it.item_code = COALESCE(pi.item_code, soi.item_code)
-
-            LEFT JOIN (
-                SELECT
-                    parent,
-                    parent_item,
-                    SUM(qty) AS total_qty
-                FROM aladdin.`tabPacked Item`
-                GROUP BY parent, parent_item
-            ) pi_totals
-                ON pi_totals.parent = so.name
-                AND pi_totals.parent_item = soi.item_code
-
-            LEFT JOIN logs.erpnext_arbi_titipaja_api_log api_log
-            ON api_log.id = (
+        LEFT JOIN aladdin.tabItem it ON it.item_code = COALESCE(pi.item_code, soi.item_code)
+        LEFT JOIN logs.erpnext_arbi_titipaja_api_log api_log ON api_log.id = (
                 SELECT l2.id
                 FROM logs.erpnext_arbi_titipaja_api_log l2
-                WHERE l2.po_no = so.po_no
-                AND l2.title = 'Price Detail'
-                ORDER BY l2.created_at DESC, l2.id DESC
-                LIMIT 1
+                WHERE l2.po_no = so.po_no AND l2.title = 'Price Detail'
+                ORDER BY l2.created_at DESC, l2.id DESC LIMIT 1
             )
 
-            WHERE soi.brand = 'Kino'
-            AND so.docstatus = {docstatus}
-            {condition_transaction_date_sql}
-        ) calc
-        WHERE calc.quantity != 0
-        {condition_sql}
-        ORDER BY calc.po_no, calc.name, calc.idx, calc.pi_idx;
+        WHERE soi.brand = 'Kino'
+        AND so.docstatus = {docstatus}
+        {condition_transaction_date_sql}
+    ) calc
+    WHERE calc.quantity != 0
+    {condition_sql}
+    GROUP BY calc.soi_name, calc.pi_name
+    ORDER BY calc.transaction_date, calc.name, calc.soi_name, calc.pi_name
     """
     try:
-        result = execute_query_fetch(query=query)
+        result = execute_query_fetch(query=query) or []
+        for row in result:
+            item_code = row.get("item_code")
+            if item_code:
+                dbp_price = select_dbp_price(item_code,end_date)
+                if dbp_price is not None:
+                    row["price_list_rate_dbp"] = dbp_price
         # payloads = build_payload(result=result)
         # for test
         # payloads = mock_data()
@@ -708,124 +699,182 @@ def get_unique_so_ref(payloads:list):
             so_refs.add(so_ref)
     return list(so_refs)
 
+DBP_PRICE_CACHE = {}
+DBP_CACHE_LOADED = [False,""]
+DBP_LOCK = Lock()
+
+
+def select_dbp_price(item_code: str, end_date: str):
+
+    global DBP_CACHE_LOADED
+
+    if not DBP_CACHE_LOADED[0] or DBP_CACHE_LOADED[1] != end_date:
+        with DBP_LOCK:
+            if not DBP_CACHE_LOADED[0] or DBP_CACHE_LOADED[1] != end_date:
+                load_dbp_cache(end_date=end_date)
+
+    return DBP_PRICE_CACHE.get(item_code)
+
+
+def load_dbp_cache(end_date: str):
+    global DBP_PRICE_CACHE, DBP_CACHE_LOADED
+    try:
+        query = """
+            SELECT ip.item_code, ip.price_list_rate
+            FROM `tabItem Price` ip
+            INNER JOIN (
+                SELECT item_code, MAX(valid_from) as max_valid_from
+                FROM `tabItem Price`
+                WHERE price_list = 'DBP'
+                AND brand = 'Kino'
+                AND valid_from <= %s
+                GROUP BY item_code
+            ) latest
+            ON ip.item_code = latest.item_code
+            AND ip.valid_from = latest.max_valid_from
+            WHERE ip.price_list = 'DBP'
+            AND ip.brand = 'Kino'
+        """
+        rows = execute_query_fetch(query=query, params=(end_date,),is_asi=True) or []
+
+        # get all data to db
+        get_all_data = f"""
+        select item_code,price_list_rate,valid_from 
+        from aladdin.`tabItem Price`
+        WHERE price_list = 'DBP'
+        AND brand = 'Kino'
+        AND valid_from <= '{end_date}'
+        """
+        result_all_data = execute_query_fetch(query=get_all_data,is_asi=True) or []
+        # turncate table before insert new cache
+        providers_table.truncate_if_exists()
+        # insert
+        providers_table.log_bulk(result_all_data)
+
+        DBP_PRICE_CACHE = {
+            item_code: price
+            for item_code, price in rows
+        }
+
+        DBP_CACHE_LOADED = [True, end_date]
+    except Exception as e:
+        raise Exception(f"Error loading DBP cache: {e}")
+
 def create_update_invoice_payload_dn(order_ref:str,start_date:str,end_date:str,cancel:bool=False):
-    sql_condition = f"AND dii.against_sales_order = '{order_ref}'" if order_ref else ""
+    sql_condition = f"AND dni.against_sales_order = '{order_ref}'" if order_ref else ""
     is_return = 0
     if cancel:
         is_return = 1
     query = f"""
+    SELECT
+        calc.name,
+        calc.po_no,
+        calc.transaction_date,
+        calc.grand_total_with_vat,
+        calc.master_bundle_item,
+        calc.item_code,
+        calc.sub_brand,
+        calc.quantity,
+        calc.selling_price_list,
+        calc.price_list_rate,
+        
+        CAST(calc.harga_jual_satuan AS DECIMAL(20,4)) AS harga_jual,
+        
+        CAST(calc.harga_jual_satuan * calc.quantity AS DECIMAL(20,4)) AS total_amount,
+        CAST((calc.harga_jual_satuan * calc.quantity) * 0.11 AS DECIMAL(20,4)) AS tax_amount,
+        CAST((calc.harga_jual_satuan * calc.quantity) * 1.11 AS DECIMAL(20,4)) AS amount,
+        
+        calc.is_bundle_item,
+        calc.store,
+        calc.channel,
+        calc.price_list_rate_dbp,
+        calc.dni_name,
+        calc.pi_name
+    FROM (
         SELECT
-            dii.parent AS dn,
-            dii.against_sales_order AS name,
+            so.name,
             so.po_no,
-            so.grand_total,
             so.transaction_date,
-            DATE(dii.modified) as modified_date,
+            so.grand_total AS grand_total_with_vat,
+            so.selling_price_list,
+            COALESCE(pi.parent_item, dni.item_code) AS master_bundle_item,
+            COALESCE(pi.item_code, dni.item_code) AS item_code,
+            COALESCE(pi.qty, dni.qty) AS quantity,
 
-            COALESCE(pi.parent_item, '') AS master_bundle_item,
-            COALESCE(pi.item_code, dii.item_code) AS item_code,
+            CASE 
+                WHEN pi.item_code IS NOT NULL THEN 
+                    ((dni.price_list_rate * dni.qty) / NULLIF(bundle_sum.total_pcs_in_this_row, 0))
+                ELSE 
+                    dni.price_list_rate 
+            END AS harga_jual_satuan,
+            dni.price_list_rate,
 
-            CAST(
-                COALESCE(
-                    (dii.rate / pi_totals.total_qty) * pi.qty,
-                    dii.rate * (dii.qty)
-                ) * 0.11
-                AS DECIMAL(20,4)
-            ) AS tax_amount,
-
-            CAST(
-                COALESCE(
-                    (dii.rate / pi_totals.total_qty) * pi.qty,
-                    dii.rate * (dii.qty)
-                ) * 1.11
-                AS DECIMAL(20,4)
-            ) AS amount,
-
-            ABS(COALESCE(pi.qty, dii.qty)) AS quantity,
-
-            CAST(
-                COALESCE(
-                    dii.rate * pi.qty / pi_totals.total_qty,
-                    dii.rate
-                ) AS DECIMAL(20,4)
-            ) AS harga_jual,
-
-            CAST(
-                COALESCE(
-                    (dii.rate / pi_totals.total_qty) * pi.qty,
-                    dii.rate * (dii.qty)
-                ) AS DECIMAL(20,4)
-            ) AS total_amount,
+            CASE WHEN pi.item_code IS NOT NULL THEN 1 ELSE 0 END AS is_bundle_item,
+            JSON_UNQUOTE(JSON_EXTRACT(api_log.response, '$.data.price[0].store')) AS store,
+            JSON_UNQUOTE(JSON_EXTRACT(api_log.response, '$.data.price[0].channel')) AS channel,
+            it.sub_brand,
+            
+            dni.name AS dni_name,
+            COALESCE(pi.name, 'SINGLE') AS pi_name,
 
             (
                 SELECT ip.price_list_rate
-                FROM `tabItem Price` ip
-                WHERE ip.item_code = COALESCE(pi.item_code, dii.item_code)
+                FROM aladdin.`tabItem Price` ip
+                WHERE ip.item_code = COALESCE(pi.item_code, dni.item_code)
                 AND ip.price_list = 'DBP'
                 AND ip.valid_from <= so.transaction_date
                 ORDER BY ip.valid_from DESC
                 LIMIT 1
-            ) AS price_list_rate_dbp,
+            ) AS price_list_rate_dbp
 
-            CASE
-                WHEN pi.item_code IS NOT NULL THEN 1
-                ELSE 0
-            END AS is_bundle_item,
-
-            JSON_UNQUOTE(JSON_EXTRACT(api_log.response, '$.data.price[0].store'))   AS store,
-            JSON_UNQUOTE(JSON_EXTRACT(api_log.response, '$.data.price[0].channel')) AS channel,
-
-            dii.idx,
-            it.sub_brand,
-            COALESCE(pi.idx, 0) AS pi_idx
-
-        FROM `tabDelivery Note Item` dii
-
+        FROM aladdin.`tabDelivery Note Item` dni
+        INNER JOIN aladdin.`tabSales Order` so ON dni.against_sales_order = so.name
+        
         LEFT JOIN `tabDelivery Note` dn
-            ON dn.name = dii.parent
+            ON dn.name = dni.parent
+        
+        LEFT JOIN aladdin.`tabPacked Item` pi 
+            ON pi.parent = dni.parent 
+            AND pi.parent_detail_docname = dni.name
 
-        LEFT JOIN `tabSales Order` so
-            ON so.name = dii.against_sales_order
-
-        LEFT JOIN `tabPacked Item` pi
-            ON pi.parent = so.name
-        AND pi.parent_item = dii.item_code
 
         LEFT JOIN (
-            SELECT
-                parent,
-                parent_item,
-                SUM(qty) AS total_qty
-            FROM `tabPacked Item`
-            GROUP BY parent, parent_item
-        ) pi_totals
-            ON pi_totals.parent = so.name
-        AND pi_totals.parent_item = dii.item_code
+            SELECT 
+                parent_detail_docname, 
+                SUM(qty) as total_pcs_in_this_row
+            FROM aladdin.`tabPacked Item`
+            GROUP BY parent_detail_docname
+        ) bundle_sum ON bundle_sum.parent_detail_docname = dni.name
 
-        LEFT JOIN logs.erpnext_arbi_titipaja_api_log api_log
-        ON api_log.id = (
-            SELECT l2.id
-            FROM logs.erpnext_arbi_titipaja_api_log l2
-            WHERE l2.po_no = so.po_no
-            AND l2.title = 'Price Detail'
-            ORDER BY l2.created_at DESC, l2.id DESC
-            LIMIT 1
-        )
+        LEFT JOIN aladdin.tabItem it ON it.item_code = COALESCE(pi.item_code, dni.item_code)
+        LEFT JOIN logs.erpnext_arbi_titipaja_api_log api_log ON api_log.id = (
+                SELECT l2.id
+                FROM logs.erpnext_arbi_titipaja_api_log l2
+                WHERE l2.po_no = so.po_no AND l2.title = 'Price Detail'
+                ORDER BY l2.created_at DESC, l2.id DESC LIMIT 1
+            )
 
-        LEFT JOIN `tabItem` it
-            ON it.item_code = COALESCE(pi.item_code, dii.item_code)
-
-        WHERE DATE(dii.modified) BETWEEN '{start_date}' AND '{end_date}'
-        AND dii.against_sales_order IS NOT NULL
+        WHERE dni.brand = 'Kino'
+        AND DATE(dni.modified) BETWEEN '{start_date}' AND '{end_date}'
         AND dn.docstatus = 1
         AND dn.is_return = {is_return}
         {sql_condition}
-        AND dii.brand = 'Kino';
+    ) calc
+    WHERE calc.quantity != 0
+    GROUP BY calc.dni_name, calc.pi_name
+    ORDER BY calc.transaction_date, calc.name, calc.dni_name, calc.pi_name
     """
     print(query)
     result = execute_query_fetch(query=query)
     if result:
+        for row in result:
+            item_code = row.get("item_code")
+            if item_code:
+                dbp_price = select_dbp_price(item_code,end_date)
+                if dbp_price is not None:
+                    row["price_list_rate_dbp"] = dbp_price
         return result
+
 
 def worker_send_invoice(raw_payloads,is_cancel=False):
     grouped = {}

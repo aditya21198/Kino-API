@@ -112,3 +112,81 @@ class KinoLogger:
         finally:
             cur.close()
             db.close()
+    
+    def log_bulk(self, logs_list: list, batch_size: int = 1000):
+        if self._table == "kino_api_logs":
+            return 0
+        if not self.is_asi:
+            return 0
+        if not logs_list:
+            return 0
+
+        db = self.SessionLocal()
+        conn = db.connection().connection
+        cur = conn.cursor()
+
+        try:
+            # normalize & serialize
+            processed_list = []
+            for logs in logs_list:
+                processed_row = {}
+                for k, v in logs.items():
+                    if isinstance(v, (dict, list)):
+                        processed_row[k] = json.dumps(v)
+                    else:
+                        processed_row[k] = v
+                processed_list.append(processed_row)
+
+            # ensure table & columns exist
+            all_keys = set()
+            for row in processed_list:
+                all_keys.update(row.keys())
+
+            self.ensure_table(all_keys)
+
+            columns = list(all_keys)
+            columns_sql = ', '.join([f"`{k}`" for k in columns])
+            placeholders = ', '.join(['%s'] * len(columns))
+
+            sql = f"""
+                INSERT INTO `{self._table}` ({columns_sql})
+                VALUES ({placeholders})
+            """
+
+            # prepare values in correct column order
+            values = []
+            for row in processed_list:
+                values.append(tuple(row.get(col) for col in columns))
+
+            # batch insert
+            for i in range(0, len(values), batch_size):
+                batch = values[i:i+batch_size]
+                cur.executemany(sql, batch)
+
+            conn.commit()
+            return len(values)
+
+        except Exception:
+            print("Bulk Log Insert Error:", traceback.format_exc())
+            conn.rollback()
+            return 0
+
+        finally:
+            cur.close()
+            db.close()
+    
+    def truncate_if_exists(self):
+        db = self.SessionLocal()
+        conn = db.connection().connection
+        cur = conn.cursor()
+
+        try:
+            cur.execute("SHOW TABLES LIKE %s", (self._table,))
+            exists = cur.fetchone()
+
+            if exists:
+                cur.execute(f"TRUNCATE TABLE `{self._table}`")
+                conn.commit()
+        finally:
+            cur.close()
+            db.close()

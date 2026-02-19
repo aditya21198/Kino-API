@@ -3,7 +3,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import requests
 from datetime import datetime,timedelta
 import calendar
-from kino.kino_api import ids_post_invoice,post_stock
+from kino.kino_api import ids_post_invoice,post_stock,load_dbp_cache
 from fastapi import FastAPI, BackgroundTasks
 
 def get_start_and_last_day_of_the_month():
@@ -47,3 +47,6 @@ def end_of_the_day_stock_job():
         "warehouse":None
     }
     post_stock(data=post_stock_param)
+
+def post_load_dbp_asi(data_dict:dict):
+    load_dbp_cache(end_date=data_dict.get("end_date"))

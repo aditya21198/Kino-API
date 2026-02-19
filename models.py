@@ -17,3 +17,6 @@ class ManualSendData(BaseModel):
     end_date:Optional[str]=None
     item_code:Optional[str]=None
     warehouse:Optional[str]=None
+
+class LoadDBPCache(BaseModel):
+    end_date:Optional[str]=None
