@@ -116,8 +116,6 @@ class KinoLogger:
     def log_bulk(self, logs_list: list, batch_size: int = 1000):
         if self._table == "kino_api_logs":
             return 0
-        if not self.is_asi:
-            return 0
         if not logs_list:
             return 0
 
