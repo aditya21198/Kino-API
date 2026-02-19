@@ -720,7 +720,7 @@ def load_dbp_cache(end_date: str):
     global DBP_PRICE_CACHE, DBP_CACHE_LOADED
     try:
         query = """
-            SELECT ip.item_code, ip.price_list_rate, ip.valid_
+            SELECT ip.item_code, ip.price_list_rate, ip.valid_from
             FROM `tabItem Price` ip
             INNER JOIN (
                 SELECT item_code, MAX(valid_from) as max_valid_from
@@ -736,10 +736,19 @@ def load_dbp_cache(end_date: str):
             AND ip.brand = 'Kino'
         """
         rows = execute_query_fetch(query=query, params=(end_date,),is_asi=True) or []
+
+        # get all data to db
+        get_all_data = """
+        select item_code,price_list_rate,valid_from 
+        from aladdin.`tabItem Price`
+        WHERE price_list = 'DBP'
+        AND brand = 'Kino'
+        """
+        result_all_data = execute_query_fetch(query=get_all_data,is_asi=True) or []
         # turncate table before insert new cache
         providers_table.truncate_if_exists()
         # insert
-        providers_table.log_bulk(rows)
+        providers_table.log_bulk(result_all_data)
 
         DBP_PRICE_CACHE = {
             item_code: price
