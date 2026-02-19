@@ -621,10 +621,6 @@ def create_post_invoice_payload(order_ref:str = None,start_date:str = None,end_d
                 dbp_price = select_dbp_price(item_code,end_date)
                 if dbp_price is not None:
                     row["price_list_rate_dbp"] = dbp_price
-        # truncate data to update newest one
-        providers_table.truncate_if_exists()
-        # add data to providers table
-        providers_table.log_bulk(result)
         # payloads = build_payload(result=result)
         # for test
         # payloads = mock_data()
@@ -703,35 +699,28 @@ def get_unique_so_ref(payloads:list):
             so_refs.add(so_ref)
     return list(so_refs)
 
+DBP_PRICE_CACHE = {}
+DBP_CACHE_LOADED = [False,""]
+DBP_LOCK = Lock()
+
 
 def select_dbp_price(item_code: str, end_date: str):
 
     global DBP_CACHE_LOADED
 
-    if not DBP_CACHE_LOADED:
+    if not DBP_CACHE_LOADED[0] or DBP_CACHE_LOADED[1] != end_date:
         with DBP_LOCK:
-            if not DBP_CACHE_LOADED:
+            if not DBP_CACHE_LOADED[0] or DBP_CACHE_LOADED[1] != end_date:
                 load_dbp_cache(end_date=end_date)
 
     return DBP_PRICE_CACHE.get(item_code)
 
-DBP_PRICE_CACHE = {}
-DBP_CACHE_LOADED = False
-DBP_LOCK = Lock()
-
 
 def load_dbp_cache(end_date: str):
     global DBP_PRICE_CACHE, DBP_CACHE_LOADED
-
-    SessionLocal, _ = make_db_connection(is_asi=True)
-    db = SessionLocal()
-
     try:
-        raw = db.connection().connection
-        cursor = raw.cursor()
-
         query = """
-            SELECT ip.item_code, ip.price_list_rate
+            SELECT ip.item_code, ip.price_list_rate, ip.valid_
             FROM `tabItem Price` ip
             INNER JOIN (
                 SELECT item_code, MAX(valid_from) as max_valid_from
@@ -746,20 +735,20 @@ def load_dbp_cache(end_date: str):
             WHERE ip.price_list = 'DBP'
             AND ip.brand = 'Kino'
         """
-
-        cursor.execute(query, (end_date,))
-        rows = cursor.fetchall()
+        rows = execute_query_fetch(query=query, params=(end_date,),is_asi=True) or []
+        # turncate table before insert new cache
+        providers_table.truncate_if_exists()
+        # insert
+        providers_table.log_bulk(rows)
 
         DBP_PRICE_CACHE = {
             item_code: price
             for item_code, price in rows
         }
 
-        DBP_CACHE_LOADED = True
-
-    finally:
-        cursor.close()
-        db.close()
+        DBP_CACHE_LOADED = [True, end_date]
+    except Exception as e:
+        raise Exception(f"Error loading DBP cache: {e}")
 
 def create_update_invoice_payload_dn(order_ref:str,start_date:str,end_date:str,cancel:bool=False):
     sql_condition = f"AND dni.against_sales_order = '{order_ref}'" if order_ref else ""
