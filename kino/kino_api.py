@@ -738,11 +738,12 @@ def load_dbp_cache(end_date: str):
         rows = execute_query_fetch(query=query, params=(end_date,),is_asi=True) or []
 
         # get all data to db
-        get_all_data = """
+        get_all_data = f"""
         select item_code,price_list_rate,valid_from 
         from aladdin.`tabItem Price`
         WHERE price_list = 'DBP'
         AND brand = 'Kino'
+        AND valid_from <= '{end_date}'
         """
         result_all_data = execute_query_fetch(query=get_all_data,is_asi=True) or []
         # turncate table before insert new cache
