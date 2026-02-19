@@ -19,7 +19,7 @@ from threading import Lock
 LOGIN_LOCK = Lock()
 
 logger = KinoLogger("kino_api_logs")
-providers_table = KinoLogger('kino_api_result')
+providers_table = KinoLogger('kino_item_price_result')
 
 load_dotenv()
 
