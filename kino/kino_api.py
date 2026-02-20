@@ -5,7 +5,7 @@ from models import KinoPostStock
 from dotenv import load_dotenv
 import os
 from datetime import datetime,timedelta,date
-from database import execute_query_fetch,get_price_list, make_db_connection,update_table
+from database import execute_query_fetch, make_db_connection,update_table
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
@@ -19,7 +19,7 @@ from threading import Lock
 LOGIN_LOCK = Lock()
 
 logger = KinoLogger("kino_api_logs")
-providers_table = KinoLogger('kino_api_result')
+providers_table = KinoLogger('kino_item_price_result')
 
 load_dotenv()
 
@@ -253,11 +253,6 @@ def get_salesman_code(region_id: str):
     if region_id in mapping:
         return mapping[region_id]
     raise Exception("Salesman Not Found in Salesman mapping")
-
-
-def get_price_list_item(item:str,price_list:str):
-    result = get_price_list(item_code=item,price_list=price_list)
-    return result
 
 def grouped_data_by_order_id(query_result: list, is_cancel: bool = False):
     inv_type = "INV02"
@@ -739,8 +734,13 @@ def load_dbp_cache(end_date: str):
 
         # get all data to db
         get_all_data = f"""
-        select item_code,price_list_rate,valid_from 
-        from aladdin.`tabItem Price`
+        select 
+            item_code,
+            price_list_rate,
+            valid_from,
+            price_list,
+            valid_upto
+        from `tabItem Price`
         WHERE price_list = 'DBP'
         AND brand = 'Kino'
         AND valid_from <= '{end_date}'
