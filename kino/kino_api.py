@@ -1316,7 +1316,7 @@ def post_stock(data:dict = None):
                     url,
                     json=header_maxlife,
                     headers=headers,
-                    timeout=(5,20)
+                    timeout=(5,120)
                 )
                 full_response_text = json.dumps(response.text) or ""
                 resp_json = safe_response_json(response)
