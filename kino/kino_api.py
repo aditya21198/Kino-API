@@ -876,7 +876,10 @@ def create_update_invoice_payload_dn(order_ref:str,start_date:str,end_date:str,c
         return result
 
 
-def worker_send_invoice(raw_payloads,is_cancel=False):
+from collections import defaultdict
+import traceback
+
+def worker_send_invoice(raw_payloads, is_cancel=False, stock_max_life=None, stock_non_maxlife=None):
     grouped = {}
     for row in raw_payloads:
         so_ref = row.get('name')
@@ -884,25 +887,106 @@ def worker_send_invoice(raw_payloads,is_cancel=False):
             continue
         grouped.setdefault(so_ref, []).append(row)
 
-    def worker(so_ref, rows):
+    stock_map_maxlife = {}
+    stock_map_non_maxlife = {}
+
+    if stock_max_life:
+        for data in stock_max_life.get("DATA", []):
+            for item in data.get("DETAIL", []):
+                stock_map_maxlife[item["PRDCODE"]] = item
+
+    if stock_non_maxlife:
+        for data in stock_non_maxlife.get("DATA", []):
+            for item in data.get("DETAIL", []):
+                stock_map_non_maxlife[item["PRDCODE"]] = item
+
+    for so_ref, rows in grouped.items():
         try:
-            payload = build_payload(rows,is_cancel=is_cancel)
-            print(payload)
+
+            payload = build_payload(rows, is_cancel=is_cancel)
+
+            new_payload_maxlife = {
+                "INTERFACEID": "T006",
+                "CLIENTID": get_kino_config(maxlife=True).get('kino_client_id'),
+                "DATA": [{"DETAIL": []}]
+            }
+
+            new_payload_non_maxlife = {
+                "INTERFACEID": "T006",
+                "CLIENTID": get_kino_config(maxlife=False).get('kino_client_id'),
+                "DATA": [{"DETAIL": []}]
+            }
+
+            aggregate_maxlife = defaultdict(int)
+            aggregate_non_maxlife = defaultdict(int)
+
+            for data in payload[0].get("DATA", []):
+                for detail in data.get("DETAIL", []):
+                    pcode = detail["PCODE"]
+                    qty = detail["QTY"]
+
+                    if pcode in stock_map_maxlife:
+                        aggregate_maxlife[pcode] += qty
+
+                    if pcode in stock_map_non_maxlife:
+                        aggregate_non_maxlife[pcode] += qty
+
+            for pcode, qty in aggregate_maxlife.items():
+                stock_item = stock_map_maxlife[pcode]
+                new_payload_maxlife["DATA"][0]["DETAIL"].append({
+                    "PRDCODE": pcode,
+                    "WHLOC1": stock_item["WHLOC1"],
+                    "WHLOC2": stock_item["WHLOC2"],
+                    "QTY": stock_item["QTY"] + qty
+                })
+
+            for pcode, qty in aggregate_non_maxlife.items():
+                stock_item = stock_map_non_maxlife[pcode]
+                new_payload_non_maxlife["DATA"][0]["DETAIL"].append({
+                    "PRDCODE": pcode,
+                    "WHLOC1": stock_item["WHLOC1"],
+                    "WHLOC2": stock_item["WHLOC2"],
+                    "QTY": stock_item["QTY"] + qty
+                })
+            
+            if (new_payload_maxlife["DATA"][0]["DETAIL"] or
+                new_payload_non_maxlife["DATA"][0]["DETAIL"]):
+                
+                post_stock_payload(
+                    header_maxlife=new_payload_maxlife,
+                    header_without_maxlife=new_payload_non_maxlife
+                )
+
             if is_cancel:
                 latest_increment = get_last_cancelled_order_ref_name(order_ref=so_ref)
+
                 if latest_increment:
-                    new_order_ref = increment_name(order_ref=latest_increment[0]['order_ref'])
-                    payload[0]['DATA'][0]['ORDER_REF'] = new_order_ref
-                    payload[0]['DATA'][0]['SFA_ORDERNO'] = new_order_ref
+                    new_order_ref = increment_name(
+                        order_ref=latest_increment[0]['order_ref']
+                    )
                 else:
                     new_order_ref = increment_name(order_ref=so_ref)
-                    payload[0]['DATA'][0]['ORDER_REF'] = new_order_ref
-                    payload[0]['DATA'][0]['SFA_ORDERNO'] = new_order_ref
+
+                payload[0]['DATA'][0]['ORDER_REF'] = new_order_ref
+                payload[0]['DATA'][0]['SFA_ORDERNO'] = new_order_ref
+
                 cancel_order = check_cancelled_invoice(order_ref=so_ref)
+
                 if not cancel_order:
-                    send_single_invoice(payload,is_cancel=is_cancel)
+                    send_single_invoice(payload, is_cancel=is_cancel)
+                    # update stock real setiap selesai kirim so
+                    # if stock_max_life:
+                    #     post_stock_payload(header_maxlife=stock_max_life)
+                    # if stock_non_maxlife:
+                    #     post_stock_payload(header_without_maxlife=stock_non_maxlife)                    
             else:
                 send_single_invoice(payload)
+                # update stock real setiap selesai kirim so
+                # if stock_max_life:
+                #     post_stock_payload(header_maxlife=stock_max_life)
+                # if stock_non_maxlife:
+                #     post_stock_payload(header_without_maxlife=stock_non_maxlife)  
+
         except Exception:
             err_text = traceback.format_exc()
             logger.log({
@@ -915,19 +999,49 @@ def worker_send_invoice(raw_payloads,is_cancel=False):
                 "request": None,
                 "response": err_text
             })
+    # def worker(so_ref, rows):
+    #     try:
+    #         payload = build_payload(rows,is_cancel=is_cancel)
+    #         if is_cancel:
+    #             latest_increment = get_last_cancelled_order_ref_name(order_ref=so_ref)
+    #             if latest_increment:
+    #                 new_order_ref = increment_name(order_ref=latest_increment[0]['order_ref'])
+    #                 payload[0]['DATA'][0]['ORDER_REF'] = new_order_ref
+    #                 payload[0]['DATA'][0]['SFA_ORDERNO'] = new_order_ref
+    #             else:
+    #                 new_order_ref = increment_name(order_ref=so_ref)
+    #                 payload[0]['DATA'][0]['ORDER_REF'] = new_order_ref
+    #                 payload[0]['DATA'][0]['SFA_ORDERNO'] = new_order_ref
+    #             cancel_order = check_cancelled_invoice(order_ref=so_ref)
+    #             if not cancel_order:
+    #                 send_single_invoice(payload,is_cancel=is_cancel)
+    #         else:
+    #             send_single_invoice(payload)
+    #     except Exception:
+    #         err_text = traceback.format_exc()
+    #         logger.log({
+    #             "url": None,
+    #             "title": "INVOICE_ERROR",
+    #             "order_ref": so_ref,
+    #             "method": "POST",
+    #             "status_code": 500,
+    #             "kino_status": None,
+    #             "request": None,
+    #             "response": err_text
+    #         })
 
-    with ThreadPoolExecutor(max_workers=5) as executor:
-        futures = [
-            executor.submit(worker, so_ref, rows)
-            for so_ref, rows in grouped.items()
-        ]
+    # with ThreadPoolExecutor(max_workers=5) as executor:
+    #     futures = [
+    #         executor.submit(worker, so_ref, rows)
+    #         for so_ref, rows in grouped.items()
+    #     ]
 
-        for future in as_completed(futures):
-            try:
-                future.result()
-            except Exception:
-                print(traceback.format_exc())
-                raise Exception(traceback.format_exc())
+    #     for future in as_completed(futures):
+    #         try:
+    #             future.result()
+    #         except Exception:
+    #             print(traceback.format_exc())
+    #             raise Exception(traceback.format_exc())
 
 def check_cancelled_invoice(order_ref):
     query = f"""
@@ -984,6 +1098,7 @@ def ids_post_invoice(data_dict: dict):
     end_date = data_dict.get('END_DATE')
     try:
         # send first sales order
+        header_maxlife, header_without_maxlife = create_stock_payload(item_code = None,warehouse=None,date=end_date)
         if order_ref:
             print("insert so")
             for order in order_ref:
@@ -1401,6 +1516,100 @@ def post_stock(data:dict = None):
             "response": traceback.format_exc()
         })
 
+def post_stock_payload(header_maxlife = {},header_without_maxlife = {}):
+    if header_maxlife.get('DATA'):
+        try:
+            payloads = header_maxlife
+            token = login(maxlife=True)['access_token']
+            print("token maxlife ok\n")
+            base_url = get_kino_config().get('kino_host')
+            url = f"{base_url}api/ids/extclient/masterpayload"
+
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {token}"
+            }
+            print("jalanin request\n")
+            response = requests.post(
+                url,
+                json=header_maxlife,
+                headers=headers,
+                timeout=(5,120)
+            )
+            full_response_text = json.dumps(response.text) or ""
+            resp_json = safe_response_json(response)
+            # Handle HTTP errors
+            response.raise_for_status()
+            logger.log({
+                "url": url,
+                "title": "POST_IDS_STOCK",
+                "method": "POST",
+                "status_code": response.status_code,
+                "kino_status":resp_json.get("STATUSDESC") if resp_json else full_response_text[-10000:],
+                "request": header_maxlife,
+                "response": full_response_text[-10000:]
+            })
+        except requests.exceptions.HTTPError as http_err:
+            base_url = get_kino_config().get('kino_host')
+            url = f"{base_url}api/ids/extclient/masterpayload"
+            logger.log({
+                "url": url,
+                "title": "POST_IDS_STOCK",
+                "method": "POST",
+                "status_code": response.status_code,
+                "kino_status":resp_json.get("STATUSDESC") if resp_json else full_response_text[-10000:],
+                "request": header_maxlife,
+                "response": full_response_text[-10000:]
+            })
+    if header_without_maxlife.get('DATA'):
+        print("post non maxlife\n")
+        print(len(header_without_maxlife))
+        try:
+            payloads = header_without_maxlife
+            token = login(maxlife=False)['access_token']
+            print("token non maxlife ok\n")
+            base_url = get_kino_config().get('kino_host')
+            url = f"{base_url}api/ids/extclient/masterpayload"
+
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {token}"
+            }
+            print("jalanin request\n")
+            response = requests.post(
+                url,
+                json=header_without_maxlife,
+                headers=headers,
+                timeout=(5,20)
+            )
+            full_response_text = json.dumps(response.text) or ""
+
+            resp_json = safe_response_json(response)
+            print(response.text)
+            # Handle HTTP errors
+            response.raise_for_status()
+            logger.log({
+                "url": url,
+                "title": "POST_IDS_STOCK",
+                "method": "POST",
+                "status_code": response.status_code,
+                "kino_status":resp_json.get("STATUSDESC") if resp_json else full_response_text[-10000:],
+                "request": header_without_maxlife,
+                "response": full_response_text[-10000:]
+            })
+        except requests.exceptions.HTTPError as http_err:
+            base_url = get_kino_config().get('kino_host')
+            url = f"{base_url}api/ids/extclient/masterpayload"
+            logger.log({
+                "url": url,
+                "title": "POST_IDS_STOCK",
+                "method": "POST",
+                "status_code": response.status_code,
+                "kino_status":resp_json.get("STATUSDESC") if resp_json else full_response_text[-10000:],
+                "request": header_without_maxlife,
+                "response": full_response_text[-10000:]
+            })
+
 
 def generate_excel_full_payload_fast(payload, filename=None):
     import pandas as pd
@@ -1627,22 +1836,32 @@ def manual_send_data(data_dict:dict):
 
 
 # Generate Excel
+# if __name__ == '__main__':
+#     try:
+#         print("running_create excel\n")
+#         raw = create_post_invoice_payload(
+#             order_ref=None,
+#             start_date='2026-01-01',
+#             end_date='2026-01-31'
+#         )
+
+#         payload = build_payload(raw)
+
+#         file_path = generate_excel_full_payload_fast(payload)
+#         print(f"Excel generated: {file_path}")
+#         render_payload_to_json(payload=payload)
+#         print(f"Json Created\n")
+
+#     except Exception:
+#         print(f"{datetime.now()} : Error in main function", flush=True)
+#         print(traceback.format_exc())
+
 if __name__ == '__main__':
-    try:
-        print("running_create excel\n")
-        raw = create_post_invoice_payload(
-            order_ref=None,
-            start_date='2026-01-01',
-            end_date='2026-01-31'
-        )
-
-        payload = build_payload(raw)
-
-        file_path = generate_excel_full_payload_fast(payload)
-        print(f"Excel generated: {file_path}")
-        render_payload_to_json(payload=payload)
-        print(f"Json Created\n")
-
-    except Exception:
-        print(f"{datetime.now()} : Error in main function", flush=True)
-        print(traceback.format_exc())
+    item_code = None
+    warehouse = None
+    date_posting = '2026-02-28'
+    header_maxlife, header_without_maxlife = create_stock_payload(item_code = item_code,warehouse=warehouse,date=date_posting)
+    print(header_maxlife)
+    print("header maxlife\n")
+    print(header_without_maxlife)
+    print("header non maxlife\n")
