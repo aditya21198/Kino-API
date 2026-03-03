@@ -954,7 +954,7 @@ def worker_send_invoice(raw_payloads, is_cancel=False, stock_max_life=None, stoc
                 post_stock_payload(
                     header_maxlife=new_payload_maxlife,
                 )
-                
+
             if new_payload_non_maxlife["DATA"][0]["DETAIL"]:
                 post_stock_payload(
                     header_without_maxlife==new_payload_non_maxlife,
@@ -1113,7 +1113,7 @@ def ids_post_invoice(data_dict: dict):
                 # for test
                 # raw_payloads = mock_data_so()
                 if raw_payloads:
-                    worker_send_invoice(raw_payloads=raw_payloads)
+                    worker_send_invoice(raw_payloads=raw_payloads,stock_max_life=header_maxlife,stock_non_maxlife=header_without_maxlife)
         else:
             print("insert so")
             raw_payloads = create_update_invoice_payload_dn(
@@ -1124,7 +1124,7 @@ def ids_post_invoice(data_dict: dict):
             # for test
             # raw_payloads = mock_data_so()
             if raw_payloads:
-                worker_send_invoice(raw_payloads=raw_payloads)
+                worker_send_invoice(raw_payloads=raw_payloads,stock_max_life=header_maxlife,stock_non_maxlife=header_without_maxlife)
         
         # RDO invoice
         if order_ref:
@@ -1139,7 +1139,7 @@ def ids_post_invoice(data_dict: dict):
                 # for test
                 # raw_payloads = mock_data_rdo()
                 if raw_payloads:
-                    worker_send_invoice(raw_payloads=raw_payloads,is_cancel=True)
+                    worker_send_invoice(raw_payloads=raw_payloads,is_cancel=True,stock_max_life=header_maxlife,stock_non_maxlife=header_without_maxlife)
         else:
             print("cancel RDO")
             raw_payloads = create_update_invoice_payload_dn(
@@ -1151,7 +1151,7 @@ def ids_post_invoice(data_dict: dict):
             # for test 
             # raw_payloads = mock_data_rdo()
             if raw_payloads:
-                worker_send_invoice(raw_payloads=raw_payloads,is_cancel=True)
+                worker_send_invoice(raw_payloads=raw_payloads,is_cancel=True,stock_max_life=header_maxlife,stock_non_maxlife=header_without_maxlife)
         
         # Cancel SO
         if order_ref:
@@ -1166,7 +1166,7 @@ def ids_post_invoice(data_dict: dict):
                 # for test
                 # raw_payloads = mock_data_cancel_so()
                 if raw_payloads:
-                    worker_send_invoice(raw_payloads=raw_payloads,is_cancel=True)
+                    worker_send_invoice(raw_payloads=raw_payloads,is_cancel=True,stock_max_life=header_maxlife,stock_non_maxlife=header_without_maxlife)
         else:
             print("cancel so")
             raw_payloads = create_post_invoice_payload(
@@ -1178,7 +1178,7 @@ def ids_post_invoice(data_dict: dict):
             # for test
             # raw_payloads = mock_data_cancel_so()
             if raw_payloads:
-                worker_send_invoice(raw_payloads=raw_payloads,is_cancel=True)
+                worker_send_invoice(raw_payloads=raw_payloads,is_cancel=True,stock_max_life=header_maxlife,stock_non_maxlife=header_without_maxlife)
 
     except Exception:
         err_text = traceback.format_exc()
