@@ -953,7 +953,7 @@ def worker_send_invoice(raw_payloads, is_cancel=False, stock_max_life=None, stoc
 
             if new_payload_non_maxlife["DATA"][0]["DETAIL"]:
                 post_stock_payload(
-                    header_without_maxlife==new_payload_non_maxlife,
+                    header_without_maxlife=new_payload_non_maxlife,
                 )
 
             if is_cancel:
