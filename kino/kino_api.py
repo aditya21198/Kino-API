@@ -13,7 +13,7 @@ from log_handler.logs import KinoLogger
 from kino.kino_api_test import mock_data,mock_post_stock_maxlife,mock_post_stock_non_maxlife,mock_data_so,mock_data_rdo,mock_data_cancel_so
 from fastapi.encoders import jsonable_encoder
 import pytz
-
+from collections import defaultdict
 from threading import Lock
 
 LOGIN_LOCK = Lock()
@@ -874,10 +874,6 @@ def create_update_invoice_payload_dn(order_ref:str,start_date:str,end_date:str,c
                 if dbp_price is not None:
                     row["price_list_rate_dbp"] = dbp_price
         return result
-
-
-from collections import defaultdict
-import traceback
 
 def worker_send_invoice(raw_payloads, is_cancel=False, stock_max_life=None, stock_non_maxlife=None):
     grouped = {}
