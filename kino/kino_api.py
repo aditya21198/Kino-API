@@ -855,7 +855,7 @@ def create_update_invoice_payload_dn(order_ref:str,start_date:str,end_date:str,c
             )
 
         WHERE dni.brand = 'Kino'
-        AND DATE(dni.modified) BETWEEN '{start_date}' AND '{end_date}'
+        AND dn.posting_date BETWEEN '{start_date}' AND '{end_date}'
         AND dn.docstatus = 1
         AND dn.is_return = {is_return}
         {sql_condition}
