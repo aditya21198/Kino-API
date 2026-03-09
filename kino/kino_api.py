@@ -1476,7 +1476,7 @@ def post_stock(data:dict = None):
                     url,
                     json=header_without_maxlife,
                     headers=headers,
-                    timeout=(5,20)
+                    timeout=(5,120)
                 )
                 full_response_text = json.dumps(response.text) or ""
 
@@ -1860,7 +1860,7 @@ if __name__ == '__main__':
     warehouse = None
     date_posting = '2026-02-28'
     header_maxlife, header_without_maxlife = create_stock_payload(item_code = item_code,warehouse=warehouse,date=date_posting)
-    print(header_maxlife)
+    print(json.dumps(header_maxlife))
     print("header maxlife\n")
-    print(header_without_maxlife)
+    print(json.dumps(header_without_maxlife))
     print("header non maxlife\n")
