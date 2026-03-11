@@ -254,6 +254,36 @@ def get_salesman_code(region_id: str):
         return mapping[region_id]
     raise Exception("Salesman Not Found in Salesman mapping")
 
+def check_trasaction_date_over_closing_date_kino(transaction_date, dn_posting_date):
+    # always get day 2 of the month (Kino Closing day)
+    today = datetime.now().date()
+    today_month_day2 = date(today.year, today.month, 2)
+    new_transaction_date = transaction_date
+
+    # check transaction date
+    if isinstance(transaction_date, str):
+        transaction_date = datetime.strptime(transaction_date, "%Y-%m-%d").date()
+    elif isinstance(transaction_date, datetime):
+        transaction_date = transaction_date.date()
+    
+    # check dn posting date
+    if isinstance(dn_posting_date, str):
+        dn_posting_date = datetime.strptime(dn_posting_date, "%Y-%m-%d").date()
+    elif isinstance(dn_posting_date, datetime):
+        dn_posting_date = dn_posting_date.date()
+    
+    # condition
+    # 1. if transaction date and dn posting date under closing date kino
+    # 2. if transaction date under closing date kino, but dn posting date is upper
+    if transaction_date <= today_month_day2:
+        if dn_posting_date <= today_month_day2:
+            new_transaction_date = transaction_date
+        elif dn_posting_date > today_month_day2:
+            new_transaction_date = date(today.year,today.month,1)
+    return new_transaction_date
+
+    
+
 def grouped_data_by_order_id(query_result: list, is_cancel: bool = False):
     inv_type = "INV02"
     if is_cancel:
@@ -298,6 +328,13 @@ def grouped_data_by_order_id(query_result: list, is_cancel: bool = False):
                     else None
                 )
 
+                posting_date = (
+                    row.get('posting_date').isoformat()
+                    if row.get('posting_date')
+                    else None
+                )
+                new_transaction_date = check_trasaction_date_over_closing_date_kino(transaction_date=transaction_date,dn_posting_date=posting_date)
+
                 grouped_data[order_id].append({
                     'REGION_CODE': region_code,
                     'BRANCH_CODE': branch_code,
@@ -307,14 +344,14 @@ def grouped_data_by_order_id(query_result: list, is_cancel: bool = False):
                     'SALESMAN_CODE': salesman_code,
                     'INV_TYPE': inv_type,
                     'ORDER_REF': order_id,
-                    'ORDER_DATE': transaction_date,
-                    'SFA_TGLORDER': transaction_date,
+                    'ORDER_DATE': new_transaction_date,
+                    'SFA_TGLORDER': new_transaction_date,
                     'SFA_ORDERNO': order_id,
                     'SFA_SLSNO': salesman_code
                 })
 
             except Exception as e:
-                # ⛔ skip order ini aja
+                #skip order ini aja
                 print(f"[SKIP ORDER {order_id}] {e}")
                 grouped_data.pop(order_id, None)
                 continue
@@ -777,6 +814,7 @@ def create_update_invoice_payload_dn(order_ref:str,start_date:str,end_date:str,c
         calc.quantity,
         calc.selling_price_list,
         calc.price_list_rate,
+        calc.posting_date,
         
         CAST(calc.harga_jual_satuan AS DECIMAL(20,4)) AS harga_jual,
         
@@ -797,6 +835,7 @@ def create_update_invoice_payload_dn(order_ref:str,start_date:str,end_date:str,c
             so.transaction_date,
             so.grand_total AS grand_total_with_vat,
             so.selling_price_list,
+            dn.posting_date,
             COALESCE(pi.parent_item, dni.item_code) AS master_bundle_item,
             COALESCE(pi.item_code, dni.item_code) AS item_code,
             COALESCE(pi.qty, dni.qty) AS quantity,
@@ -895,7 +934,6 @@ def worker_send_invoice(raw_payloads, is_cancel=False, stock_max_life=None, stoc
         for data in stock_non_maxlife.get("DATA", []):
             for item in data.get("DETAIL", []):
                 stock_map_non_maxlife[item["PRDCODE"]] = item
-
     for so_ref, rows in grouped.items():
         try:
 
@@ -972,19 +1010,9 @@ def worker_send_invoice(raw_payloads, is_cancel=False, stock_max_life=None, stoc
                 cancel_order = check_cancelled_invoice(order_ref=so_ref)
 
                 if not cancel_order:
-                    send_single_invoice(payload, is_cancel=is_cancel)
-                    # update stock real setiap selesai kirim so
-                    # if stock_max_life:
-                    #     post_stock_payload(header_maxlife=stock_max_life)
-                    # if stock_non_maxlife:
-                    #     post_stock_payload(header_without_maxlife=stock_non_maxlife)                    
+                    send_single_invoice(payload, is_cancel=is_cancel)   
             else:
                 send_single_invoice(payload)
-                # update stock real setiap selesai kirim so
-                # if stock_max_life:
-                #     post_stock_payload(header_maxlife=stock_max_life)
-                # if stock_non_maxlife:
-                #     post_stock_payload(header_without_maxlife=stock_non_maxlife)  
 
         except Exception:
             err_text = traceback.format_exc()
@@ -1855,12 +1883,21 @@ def manual_send_data(data_dict:dict):
 #         print(f"{datetime.now()} : Error in main function", flush=True)
 #         print(traceback.format_exc())
 
+# if __name__ == '__main__':
+#     item_code = None
+#     warehouse = None
+#     date_posting = '2026-02-28'
+#     header_maxlife, header_without_maxlife = create_stock_payload(item_code = item_code,warehouse=warehouse,date=date_posting)
+#     print(json.dumps(header_maxlife))
+#     print("header maxlife\n")
+#     print(json.dumps(header_without_maxlife))
+#     print("header non maxlife\n")
+
+
 if __name__ == '__main__':
-    item_code = None
-    warehouse = None
-    date_posting = '2026-02-28'
-    header_maxlife, header_without_maxlife = create_stock_payload(item_code = item_code,warehouse=warehouse,date=date_posting)
-    print(json.dumps(header_maxlife))
-    print("header maxlife\n")
-    print(json.dumps(header_without_maxlife))
-    print("header non maxlife\n")
+    payload = {
+    'ORDER_REF':None,
+    'START_DATE':'2026-03-10',
+    'END_DATE':'2026-03-10'
+    }
+    ids_post_invoice(data_dict=payload)
