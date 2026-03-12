@@ -281,7 +281,10 @@ def check_trasaction_date_over_closing_date_kino(transaction_date, dn_posting_da
         elif dn_posting_date > today_month_day2:
             new_transaction_date = date(today.year,today.month,1)
             new_transaction_date = new_transaction_date
-    return new_transaction_date.isoformat()
+    
+    if isinstance(new_transaction_date, (date, datetime)):
+        return new_transaction_date.isoformat()
+    return new_transaction_date
 
     
 
