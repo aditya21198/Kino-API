@@ -684,7 +684,7 @@ def send_single_invoice(payload: json,is_cancel:bool=False):
         "Authorization": f"Bearer {token}"
     }
     try:
-        response = requests.post(url, json=data[0], headers=headers,timeout=(5,20))
+        response = requests.post(url, json=data[0], headers=headers,timeout=(5,60))
 
         log_data = {
             "url": url,
@@ -716,7 +716,7 @@ def send_single_invoice(payload: json,is_cancel:bool=False):
             "order_ref":data[0]['DATA'][0]['ORDER_REF'],
             "method": "POST",
             "status_code": 500,
-            "kino_status":response.json().get("STATUSDESC",None),
+            "kino_status":None,
             "request": data[0],
             "response": e
         })
