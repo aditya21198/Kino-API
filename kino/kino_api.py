@@ -654,18 +654,19 @@ def create_post_invoice_payload(order_ref:str = None,start_date:str = None,end_d
     ORDER BY calc.transaction_date, calc.name, calc.soi_name, calc.pi_name
     """
     try:
-        result = execute_query_fetch(query=query) or []
-        for row in result:
-            item_code = row.get("item_code")
-            if item_code:
-                dbp_price = select_dbp_price(item_code,end_date)
-                if dbp_price is not None:
-                    row["price_list_rate_dbp"] = dbp_price
-        # payloads = build_payload(result=result)
-        # for test
-        # payloads = mock_data()
+        result = execute_query_fetch(query=query)
+        if result:
+            for row in result:
+                item_code = row.get("item_code")
+                if item_code:
+                    dbp_price = select_dbp_price(item_code,end_date)
+                    if dbp_price is not None:
+                        row["price_list_rate_dbp"] = dbp_price
+            # payloads = build_payload(result=result)
+            # for test
+            # payloads = mock_data()
 
-        return result
+            return result
     except Exception as error:
         raise Exception(traceback.format_exc())
 
@@ -805,8 +806,9 @@ def load_dbp_cache(end_date: str):
     except Exception as e:
         raise Exception(f"Error loading DBP cache: {e}")
 
-def create_update_invoice_payload_dn(order_ref:str,start_date:str,end_date:str,cancel:bool=False):
+def create_update_invoice_payload_dn(order_ref:str=None,start_date:str=None,end_date:str=None,cancel:bool=False):
     sql_condition = f"AND dni.against_sales_order = '{order_ref}'" if order_ref else ""
+    date_condition = f"AND dn.posting_date BETWEEN '{start_date}' AND '{end_date}'" if start_date and end_date else ""
     is_return = 0
     if cancel:
         is_return = 1
@@ -902,16 +904,15 @@ def create_update_invoice_payload_dn(order_ref:str,start_date:str,end_date:str,c
             )
 
         WHERE dni.brand = 'Kino'
-        AND dn.posting_date BETWEEN '{start_date}' AND '{end_date}'
         AND dn.docstatus = 1
         AND dn.is_return = {is_return}
+        {date_condition}
         {sql_condition}
     ) calc
     WHERE calc.quantity != 0
     GROUP BY calc.dni_name, calc.pi_name
     ORDER BY calc.transaction_date, calc.name, calc.dni_name, calc.pi_name
     """
-    print(query)
     result = execute_query_fetch(query=query)
     if result:
         for row in result:
@@ -1126,6 +1127,45 @@ def increment_name(order_ref):
         num = "-1"
         new_so = so+num
         return new_so
+
+def repost_failed_invoice(data_dict:dict):
+    order_ref = data_dict.get('ORDER_REF')
+    end_date = data_dict.get('END_DATE')
+    try:
+        header_maxlife, header_without_maxlife = create_stock_payload(item_code = None,warehouse=None,date=end_date)
+        for order in order_ref:
+            # check dn submitted
+            raw_payloads_dn_submit = create_update_invoice_payload_dn(
+                order_ref=order
+            )
+            if raw_payloads_dn_submit:
+                worker_send_invoice(raw_payloads=raw_payloads_dn_submit,stock_max_life=header_maxlife,stock_non_maxlife=header_without_maxlife)
+            # check dn rdo
+            raw_payloads_dn_submit_rdo = create_update_invoice_payload_dn(
+                order_ref=order,
+                cancel=True
+            )
+            if raw_payloads_dn_submit_rdo:
+                worker_send_invoice(raw_payloads=raw_payloads_dn_submit_rdo,stock_max_life=header_maxlife,stock_non_maxlife=header_without_maxlife)
+            # check so cancel
+            raw_payloads_so_cancel = create_post_invoice_payload(
+                order_ref=order,
+                is_cancel=True
+            )
+            if raw_payloads_so_cancel:
+                worker_send_invoice(raw_payloads=raw_payloads_so_cancel,stock_max_life=header_maxlife,stock_non_maxlife=header_without_maxlife)
+    except Exception:
+        err_text = traceback.format_exc()
+        logger.log({
+            "url": None,
+            "title": "REPOST_INVOICE_ERROR",
+            "order_ref": None,
+            "method": "POST",
+            "status_code": 500,
+            "kino_status": None,
+            "request": None,
+            "response": err_text
+        })
 
 def ids_post_invoice(data_dict: dict):
     order_ref = data_dict.get('ORDER_REF')

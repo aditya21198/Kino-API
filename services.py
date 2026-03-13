@@ -3,8 +3,10 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import requests
 from datetime import datetime,timedelta
 import calendar
-from kino.kino_api import ids_post_invoice,post_stock,load_dbp_cache
+from kino.kino_api import ids_post_invoice,post_stock,load_dbp_cache,repost_failed_invoice
 from fastapi import FastAPI, BackgroundTasks
+from database import execute_query_fetch
+import json
 
 def get_start_and_last_day_of_the_month():
     today = datetime.today()
@@ -50,3 +52,60 @@ def end_of_the_day_stock_job():
 
 def post_load_dbp_asi(data_dict:dict):
     load_dbp_cache(end_date=data_dict.get("end_date"))
+
+def check_retur_so(so_no):
+    new_so_no = ""
+    splited_so = so_no.split("-")
+    count_so_len = len(splited_so)
+    if count_so_len > 4:
+        new_so_no = "-".join(splited_so[:-1])
+    else:
+        new_so_no = so_no
+    return new_so_no
+
+def resend_kino_invoice():
+    yesterday = datetime.now() - timedelta(days=1)
+    transaction_date = yesterday.date().strftime("%Y-%m-%d")
+    query = f"""
+        select distinct(order_ref)
+        from logs.kino_api_logs
+        where date(created_at) = '{transaction_date}'
+        and order_ref is not null
+        and (kino_status is null or kino_status = 'error')
+    """
+    result = execute_query_fetch(query=query)
+    sos = []
+    if result:
+        for res in result:
+            if res.get('order_ref',None):
+                so_no = check_retur_so(res.get('order_ref'))
+                sos.append(so_no)
+    # check if so number already sucess from previous transaction in log
+    so_success = []
+    if sos:
+        sku_placeholders = ",".join(["%s"] * len(sos))
+        param = tuple(sos)
+        query = f"""
+            SELECT order_ref
+            FROM logs.kino_api_logs
+            WHERE order_ref in ({sku_placeholders})
+            and kino_status = 'success'
+        """
+        result = execute_query_fetch(query=query,params=param)
+        if result:
+            for r in result:
+                so_success.append(r.get('order_ref'))
+    failed_so = []
+    for so in sos:
+        if so not in so_success:
+            failed_so.append(so)
+    payload = {
+        "ORDER_REF":failed_so,
+        "END_DATE":transaction_date
+    }
+    repost_failed_invoice(data_dict=payload)
+
+if __name__ == "__main__":
+    resend_kino_invoice()
+
+
