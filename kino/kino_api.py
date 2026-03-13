@@ -1167,10 +1167,6 @@ def repost_failed_invoice(data_dict:dict):
             "response": err_text
         })
 
-
-
-
-
 def ids_post_invoice(data_dict: dict):
     order_ref = data_dict.get('ORDER_REF')
     start_date = data_dict.get('START_DATE')

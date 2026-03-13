@@ -8,7 +8,7 @@ import traceback
 def main():
     try:
         today = datetime.now().date()
-        print(f"Loading DBP cache for date: {today}")
+        print(f"Running Repost for date: {today}")
         resend_kino_invoice()
     except Exception:
         print(traceback.format_exc())
