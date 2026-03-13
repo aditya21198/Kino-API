@@ -337,7 +337,10 @@ def grouped_data_by_order_id(query_result: list, is_cancel: bool = False):
                     if row.get('posting_date')
                     else None
                 )
-                new_transaction_date = check_trasaction_date_over_closing_date_kino(transaction_date=transaction_date,dn_posting_date=posting_date)
+                if not is_cancel:
+                    new_transaction_date = check_trasaction_date_over_closing_date_kino(transaction_date=transaction_date,dn_posting_date=posting_date)
+                else:
+                    new_transaction_date = transaction_date
 
                 grouped_data[order_id].append({
                     'REGION_CODE': region_code,
