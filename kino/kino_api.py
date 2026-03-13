@@ -254,7 +254,7 @@ def get_salesman_code(region_id: str):
         return mapping[region_id]
     raise Exception("Salesman Not Found in Salesman mapping")
 
-def check_trasaction_date_over_closing_date_kino(transaction_date, dn_posting_date):
+def check_trasaction_date_over_closing_date_kino(transaction_date, dn_posting_date,is_cancel = False):
     # always get day 2 of the month (Kino Closing day)
     today = datetime.now().date()
     today_month_day2 = date(today.year, today.month, 2)
@@ -272,15 +272,19 @@ def check_trasaction_date_over_closing_date_kino(transaction_date, dn_posting_da
     elif isinstance(dn_posting_date, datetime):
         dn_posting_date = dn_posting_date.date()
     
-    # condition
-    # 1. if transaction date and dn posting date under closing date kino
-    # 2. if transaction date under closing date kino, but dn posting date is upper
-    if transaction_date <= today_month_day2:
-        if dn_posting_date <= today_month_day2:
-            new_transaction_date = transaction_date
-        elif dn_posting_date > today_month_day2:
-            new_transaction_date = date(today.year,today.month,1)
-            new_transaction_date = new_transaction_date
+
+    if is_cancel:
+        new_transaction_date = dn_posting_date
+    else:
+        # condition
+        # 1. if transaction date and dn posting date under closing date kino
+        # 2. if transaction date under closing date kino, but dn posting date is upper
+        if transaction_date <= today_month_day2:
+            if dn_posting_date <= today_month_day2:
+                new_transaction_date = transaction_date
+            elif dn_posting_date > today_month_day2:
+                new_transaction_date = date(today.year,today.month,1)
+                new_transaction_date = new_transaction_date
     
     if isinstance(new_transaction_date, (date, datetime)):
         return new_transaction_date.isoformat()
@@ -337,7 +341,7 @@ def grouped_data_by_order_id(query_result: list, is_cancel: bool = False):
                     if row.get('posting_date')
                     else None
                 )
-                new_transaction_date = check_trasaction_date_over_closing_date_kino(transaction_date=transaction_date,dn_posting_date=posting_date)
+                new_transaction_date = check_trasaction_date_over_closing_date_kino(transaction_date=transaction_date,dn_posting_date=posting_date,is_cancel=is_cancel)
 
                 grouped_data[order_id].append({
                     'REGION_CODE': region_code,
