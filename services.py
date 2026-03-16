@@ -71,6 +71,7 @@ def resend_kino_invoice():
         from logs.kino_api_logs
         where date(created_at) = '{transaction_date}'
         and order_ref is not null
+        and response not like '%%SFA_ORDERNO ALREADY EXISTS%%'
         and (kino_status is null or kino_status = 'error')
     """
     result = execute_query_fetch(query=query)
@@ -78,7 +79,7 @@ def resend_kino_invoice():
     if result:
         for res in result:
             if res.get('order_ref',None):
-                so_no = check_retur_so(res.get('order_ref'))
+                so_no = res.get('order_ref')
                 sos.append(so_no)
     # check if so number already sucess from previous transaction in log
     so_success = []
@@ -98,7 +99,8 @@ def resend_kino_invoice():
     failed_so = []
     for so in sos:
         if so not in so_success:
-            failed_so.append(so)
+            main_so = check_retur_so(so)
+            failed_so.append(main_so)
     payload = {
         "ORDER_REF":failed_so,
         "END_DATE":transaction_date

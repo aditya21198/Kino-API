@@ -563,6 +563,7 @@ def create_post_invoice_payload(order_ref:str = None,start_date:str = None,end_d
         calc.name,
         calc.po_no,
         calc.transaction_date,
+        calc.transaction_date as posting_date,
         calc.grand_total_with_vat,
         calc.master_bundle_item,
         calc.item_code,
