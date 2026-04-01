@@ -3,7 +3,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import requests
 from datetime import datetime,timedelta
 import calendar
-from kino.kino_api import ids_post_invoice,post_stock,load_dbp_cache,repost_failed_invoice
+from kino.new_kino_api import ids_post_invoice,post_stock,load_dbp_cache,repost_failed_invoice
 from fastapi import FastAPI, BackgroundTasks
 from database import execute_query_fetch
 import json

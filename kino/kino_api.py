@@ -197,7 +197,8 @@ def load_customer_mapping():
             row['cm_cust_code1'],
             row['cm_cust_code2'],
             row['cm_entity'],
-            row['cm_branch']
+            row['cm_branch'],
+            row['cm_region']
         )
     CUSTOMER_MAPPING_CACHE = mapping
     return mapping
@@ -826,6 +827,7 @@ def create_update_invoice_payload_dn(order_ref:str=None,start_date:str=None,end_
         calc.selling_price_list,
         calc.price_list_rate,
         calc.posting_date,
+        calc.set_warehouse as warehouse,
         
         CAST(calc.harga_jual_satuan AS DECIMAL(20,4)) AS harga_jual,
         
@@ -846,6 +848,7 @@ def create_update_invoice_payload_dn(order_ref:str=None,start_date:str=None,end_
             so.transaction_date,
             so.grand_total AS grand_total_with_vat,
             so.selling_price_list,
+            so.set_warehouse,
             dn.posting_date,
             COALESCE(pi.parent_item, dni.item_code) AS master_bundle_item,
             COALESCE(pi.item_code, dni.item_code) AS item_code,
@@ -916,12 +919,12 @@ def create_update_invoice_payload_dn(order_ref:str=None,start_date:str=None,end_
     """
     result = execute_query_fetch(query=query)
     if result:
-        for row in result:
-            item_code = row.get("item_code")
-            if item_code:
-                dbp_price = select_dbp_price(item_code,end_date)
-                if dbp_price is not None:
-                    row["price_list_rate_dbp"] = dbp_price
+        # for row in result:
+        #     item_code = row.get("item_code")
+        #     if item_code:
+        #         dbp_price = select_dbp_price(item_code,end_date)
+        #         if dbp_price is not None:
+        #             row["price_list_rate_dbp"] = dbp_price
         return result
 
 def worker_send_invoice(raw_payloads, is_cancel=False, stock_max_life=None, stock_non_maxlife=None):
@@ -1945,9 +1948,4 @@ def manual_send_data(data_dict:dict):
 
 
 if __name__ == '__main__':
-    payload = {
-    'ORDER_REF':None,
-    'START_DATE':'2026-03-10',
-    'END_DATE':'2026-03-10'
-    }
-    ids_post_invoice(data_dict=payload)
+    print(create_update_invoice_payload_dn(start_date='2026-03-31',end_date='2026-03-31',order_ref=None,cancel=False))
