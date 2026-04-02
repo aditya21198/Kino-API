@@ -1147,14 +1147,14 @@ def repost_failed_invoice(data_dict:dict):
                 cancel=True
             )
             if raw_payloads_dn_submit_rdo:
-                worker_send_invoice(raw_payloads=raw_payloads_dn_submit_rdo,stock_max_life=header_maxlife,stock_non_maxlife=header_without_maxlife)
+                worker_send_invoice(is_cancel=True,raw_payloads=raw_payloads_dn_submit_rdo,stock_max_life=header_maxlife,stock_non_maxlife=header_without_maxlife)
             # check so cancel
             raw_payloads_so_cancel = create_post_invoice_payload(
                 order_ref=order,
                 is_cancel=True
             )
             if raw_payloads_so_cancel:
-                worker_send_invoice(raw_payloads=raw_payloads_so_cancel,stock_max_life=header_maxlife,stock_non_maxlife=header_without_maxlife)
+                worker_send_invoice(is_cancel=True,raw_payloads=raw_payloads_so_cancel,stock_max_life=header_maxlife,stock_non_maxlife=header_without_maxlife)
     except Exception:
         err_text = traceback.format_exc()
         logger.log({
