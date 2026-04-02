@@ -1147,14 +1147,14 @@ def repost_failed_invoice(data_dict:dict):
                 cancel=True
             )
             if raw_payloads_dn_submit_rdo:
-                worker_send_invoice(raw_payloads=raw_payloads_dn_submit_rdo,stock_max_life=header_maxlife,stock_non_maxlife=header_without_maxlife)
+                worker_send_invoice(is_cancel=True,raw_payloads=raw_payloads_dn_submit_rdo,stock_max_life=header_maxlife,stock_non_maxlife=header_without_maxlife)
             # check so cancel
             raw_payloads_so_cancel = create_post_invoice_payload(
                 order_ref=order,
                 is_cancel=True
             )
             if raw_payloads_so_cancel:
-                worker_send_invoice(raw_payloads=raw_payloads_so_cancel,stock_max_life=header_maxlife,stock_non_maxlife=header_without_maxlife)
+                worker_send_invoice(is_cancel=True,raw_payloads=raw_payloads_so_cancel,stock_max_life=header_maxlife,stock_non_maxlife=header_without_maxlife)
     except Exception:
         err_text = traceback.format_exc()
         logger.log({
@@ -1530,7 +1530,7 @@ def post_stock(data:dict = None):
                     "url": url,
                     "title": "POST_IDS_STOCK",
                     "method": "POST",
-                    "status_code": response.status_code,
+                    "status_code": 500,
                     "kino_status":resp_json.get("STATUSDESC") if resp_json else full_response_text[-10000:],
                     "request": header_maxlife,
                     "response": full_response_text[-10000:]
@@ -1578,7 +1578,7 @@ def post_stock(data:dict = None):
                     "url": url,
                     "title": "POST_IDS_STOCK",
                     "method": "POST",
-                    "status_code": response.status_code,
+                    "status_code": 500,
                     "kino_status":resp_json.get("STATUSDESC") if resp_json else full_response_text[-10000:],
                     "request": header_without_maxlife,
                     "response": full_response_text[-10000:]
@@ -1633,7 +1633,7 @@ def post_stock_payload(header_maxlife = {},header_without_maxlife = {}):
                 "url": url,
                 "title": "POST_IDS_STOCK",
                 "method": "POST",
-                "status_code": response.status_code,
+                "status_code": 500,
                 "kino_status":resp_json.get("STATUSDESC") if resp_json else full_response_text[-10000:],
                 "request": header_maxlife,
                 "response": full_response_text[-10000:]
@@ -1681,7 +1681,7 @@ def post_stock_payload(header_maxlife = {},header_without_maxlife = {}):
                 "url": url,
                 "title": "POST_IDS_STOCK",
                 "method": "POST",
-                "status_code": response.status_code,
+                "status_code": 500,
                 "kino_status":resp_json.get("STATUSDESC") if resp_json else full_response_text[-10000:],
                 "request": header_without_maxlife,
                 "response": full_response_text[-10000:]
