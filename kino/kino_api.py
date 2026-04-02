@@ -267,11 +267,15 @@ def check_trasaction_date_over_closing_date_kino(transaction_date, dn_posting_da
         transaction_date = transaction_date.date()
     
     # check dn posting date
-    if isinstance(dn_posting_date, str):
+    if isinstance(dn_posting_date, str):    
         dn_posting_date = datetime.strptime(dn_posting_date, "%Y-%m-%d").date()
     elif isinstance(dn_posting_date, datetime):
         dn_posting_date = dn_posting_date.date()
     
+    so_dn_date_diff = abs((transaction_date - dn_posting_date).days)
+
+    if so_dn_date_diff > 60:
+        transaction_date = date(today.year, today.month - 1, 1)
 
     if is_cancel:
         new_transaction_date = dn_posting_date
@@ -342,7 +346,7 @@ def grouped_data_by_order_id(query_result: list, is_cancel: bool = False):
                     else None
                 )
                 new_transaction_date = check_trasaction_date_over_closing_date_kino(transaction_date=transaction_date,dn_posting_date=posting_date,is_cancel=is_cancel)
-
+  
                 grouped_data[order_id].append({
                     'REGION_CODE': region_code,
                     'BRANCH_CODE': branch_code,
