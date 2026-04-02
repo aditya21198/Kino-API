@@ -1530,7 +1530,7 @@ def post_stock(data:dict = None):
                     "url": url,
                     "title": "POST_IDS_STOCK",
                     "method": "POST",
-                    "status_code": response.status_code,
+                    "status_code": 500,
                     "kino_status":resp_json.get("STATUSDESC") if resp_json else full_response_text[-10000:],
                     "request": header_maxlife,
                     "response": full_response_text[-10000:]
@@ -1578,7 +1578,7 @@ def post_stock(data:dict = None):
                     "url": url,
                     "title": "POST_IDS_STOCK",
                     "method": "POST",
-                    "status_code": response.status_code,
+                    "status_code": 500,
                     "kino_status":resp_json.get("STATUSDESC") if resp_json else full_response_text[-10000:],
                     "request": header_without_maxlife,
                     "response": full_response_text[-10000:]
@@ -1633,7 +1633,7 @@ def post_stock_payload(header_maxlife = {},header_without_maxlife = {}):
                 "url": url,
                 "title": "POST_IDS_STOCK",
                 "method": "POST",
-                "status_code": response.status_code,
+                "status_code": 500,
                 "kino_status":resp_json.get("STATUSDESC") if resp_json else full_response_text[-10000:],
                 "request": header_maxlife,
                 "response": full_response_text[-10000:]
@@ -1681,7 +1681,7 @@ def post_stock_payload(header_maxlife = {},header_without_maxlife = {}):
                 "url": url,
                 "title": "POST_IDS_STOCK",
                 "method": "POST",
-                "status_code": response.status_code,
+                "status_code": 500,
                 "kino_status":resp_json.get("STATUSDESC") if resp_json else full_response_text[-10000:],
                 "request": header_without_maxlife,
                 "response": full_response_text[-10000:]
