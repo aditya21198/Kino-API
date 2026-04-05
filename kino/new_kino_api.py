@@ -247,10 +247,10 @@ def check_trasaction_date_over_closing_date_kino(transaction_date, dn_posting_da
     WHERE doctype = 'Kino API Settings'
     AND field = 'kino_closing_day'
     """
-    closing_day = execute_query_fetch(query=query)[0]['value']
+    closing_day = execute_query_fetch(query=query)[0]['value'] if execute_query_fetch(query=query) and execute_query_fetch(query=query)[0]['value'] > 0 else 2
     today = datetime.now().date()
 
-    today_month_day2 = date(today.year, today.month, int(closing_day) if closing_day else 2)
+    today_month_day2 = date(today.year, today.month, int(closing_day))
     new_transaction_date = transaction_date
 
     # check transaction date
@@ -260,11 +260,18 @@ def check_trasaction_date_over_closing_date_kino(transaction_date, dn_posting_da
         transaction_date = transaction_date.date()
     
     # check dn posting date
-    if isinstance(dn_posting_date, str):
+    if isinstance(dn_posting_date, str):    
         dn_posting_date = datetime.strptime(dn_posting_date, "%Y-%m-%d").date()
     elif isinstance(dn_posting_date, datetime):
         dn_posting_date = dn_posting_date.date()
     
+    so_dn_date_diff = abs((transaction_date - dn_posting_date).days)
+
+    if so_dn_date_diff > 60:
+        if today.month == 1:
+            transaction_date = date(today.year - 1, 12, 1)
+        else:
+            transaction_date = date(today.year, today.month - 1, 1)
 
     if is_cancel:
         new_transaction_date = dn_posting_date
