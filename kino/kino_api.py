@@ -275,7 +275,10 @@ def check_trasaction_date_over_closing_date_kino(transaction_date, dn_posting_da
     so_dn_date_diff = abs((transaction_date - dn_posting_date).days)
 
     if so_dn_date_diff > 60:
-        transaction_date = date(today.year, today.month - 1, 1)
+        if today.month == 1:
+            transaction_date = date(today.year - 1, 12, 1)
+        else:
+            transaction_date = date(today.year, today.month - 1, 1)
 
     if is_cancel:
         new_transaction_date = dn_posting_date
