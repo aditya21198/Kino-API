@@ -1538,9 +1538,9 @@ def post_stock(data:dict = None):
                     "title": "POST_IDS_STOCK",
                     "method": "POST",
                     "status_code": 500,
-                    "kino_status":resp_json.get("STATUSDESC") if resp_json else full_response_text[-10000:],
+                    "kino_status":None,
                     "request": header_maxlife,
-                    "response": full_response_text[-10000:]
+                    "response": traceback.format_exc()
                 })
         if header_without_maxlife.get('DATA'):
             print("post non maxlife\n")
@@ -1586,15 +1586,15 @@ def post_stock(data:dict = None):
                     "title": "POST_IDS_STOCK",
                     "method": "POST",
                     "status_code": 500,
-                    "kino_status":resp_json.get("STATUSDESC") if resp_json else full_response_text[-10000:],
+                    "kino_status":None,
                     "request": header_without_maxlife,
-                    "response": full_response_text[-10000:]
+                    "response": traceback.format_exc()
                 })
     except Exception as e:
         logger.log({
             "title": "STOCK_ERROR",
             "method": "POST",
-            "status_code": None,
+            "status_code": 500,
             "kino_status":None,
             "request": None,
             "response": traceback.format_exc()
