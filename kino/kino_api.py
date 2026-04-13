@@ -1350,7 +1350,7 @@ def get_all_balance_kino_item(item_code: str = None, warehouse: str = None,to_da
     conditions = """
         WHERE it.brand = 'KINO'
         AND sle.docstatus = 1
-        AND sle.item_code != 'DUMMY-OVALEMIC'
+        AND sle.item_code not in ('DUMMY-OVALEMIC','OVALE-DUMMYBLUE')
         AND sle.warehouse = 'Pulogadung - ARBI'
     """
 
