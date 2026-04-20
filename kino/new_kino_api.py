@@ -1020,7 +1020,7 @@ def group_details_by_order_id(query_result: list):
             item_code = remove_kn(row.get('item_code'))
             price_list_rate = row.get('price_list_rate_dbp', None)
 
-            # kalau item_code belum ada → create
+            # kalau item_code belum ada then create
             if item_code not in grouped_detail[order_id]:
                 grouped_detail[order_id][item_code] = {
                     'PCODE': item_code,
@@ -1078,7 +1078,7 @@ def group_details_by_order_id(query_result: list):
                 item['TAX_AMT'] += abs(row.get('tax_amount', 0.0))
                 item['NET'] += abs(row.get('amount', 0.0))
 
-        # convert dict → list (biar sama kayak sebelumnya)
+        # convert dict ke list (biar sama kayak sebelumnya)
         for order_id in grouped_detail:
             grouped_detail[order_id] = list(grouped_detail[order_id].values())
 
