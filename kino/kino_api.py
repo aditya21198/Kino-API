@@ -926,12 +926,12 @@ def create_update_invoice_payload_dn(order_ref:str=None,start_date:str=None,end_
     """
     result = execute_query_fetch(query=query)
     if result:
-        # for row in result:
-        #     item_code = row.get("item_code")
-        #     if item_code:
-        #         dbp_price = select_dbp_price(item_code,end_date)
-        #         if dbp_price is not None:
-        #             row["price_list_rate_dbp"] = dbp_price
+        for row in result:
+            item_code = row.get("item_code")
+            if item_code:
+                dbp_price = select_dbp_price(item_code,end_date)
+                if dbp_price is not None:
+                    row["price_list_rate_dbp"] = dbp_price
         return result
 
 def worker_send_invoice(raw_payloads, is_cancel=False, stock_max_life=None, stock_non_maxlife=None):
