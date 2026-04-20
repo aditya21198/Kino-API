@@ -732,8 +732,12 @@ def create_post_invoice_payload(order_ref:str = None,start_date:str = None,end_d
     except Exception as error:
         raise Exception(traceback.format_exc())
 
-def create_update_invoice_payload_dn(order_ref:str=None,start_date:str=None,end_date:str=None,cancel:bool=False):
-    sql_condition = f"AND dni.against_sales_order = '{order_ref}'" if order_ref else ""
+def create_update_invoice_payload_dn(order_ref_list:list=[],order_ref:str=None,start_date:str=None,end_date:str=None,cancel:bool=False):
+    if order_ref_list:
+        order_ref_condition = " OR ".join([f"dni.against_sales_order = '{ref}'" for ref in order_ref_list])
+        sql_condition = f"AND ({order_ref_condition})"
+    else:
+        sql_condition = f"AND dni.against_sales_order = '{order_ref}'" if order_ref else ""
     date_condition = f"AND dn.posting_date BETWEEN '{start_date}' AND '{end_date}'" if start_date and end_date else ""
     is_return = 0
     if cancel:
@@ -902,29 +906,52 @@ def increment_name(order_ref):
 def repost_failed_invoice(data_dict:dict):
     order_ref = data_dict.get('ORDER_REF')
     end_date = data_dict.get('END_DATE')
+    order_ref_list = data_dict.get('ORDER_REF_LIST',[])
     try:
         payload_stock_all_warehouse = create_stock_payload(item_code = None,warehouse=None,date=end_date)
-        for order in order_ref:
+        if order_ref_list:
             # check dn submitted
             raw_payloads_dn_submit = create_update_invoice_payload_dn(
-                order_ref=order
+                order_ref_list=order_ref_list
             )
             if raw_payloads_dn_submit:
                 worker_send_invoice(raw_payloads=raw_payloads_dn_submit,stock_payload=payload_stock_all_warehouse)
             # check dn rdo
             raw_payloads_dn_submit_rdo = create_update_invoice_payload_dn(
-                order_ref=order,
+                order_ref_list=order_ref_list,
                 cancel=True
             )
             if raw_payloads_dn_submit_rdo:
                 worker_send_invoice(is_cancel=True,raw_payloads=raw_payloads_dn_submit_rdo,stock_payload=payload_stock_all_warehouse)
             # check so cancel
             raw_payloads_so_cancel = create_post_invoice_payload(
-                order_ref=order,
+                order_ref_list=order_ref_list,
                 is_cancel=True
             )
             if raw_payloads_so_cancel:
                 worker_send_invoice(is_cancel=True,raw_payloads=raw_payloads_so_cancel,stock_payload=payload_stock_all_warehouse)
+        else:
+            for order in order_ref:
+                # check dn submitted
+                raw_payloads_dn_submit = create_update_invoice_payload_dn(
+                    order_ref=order
+                )
+                if raw_payloads_dn_submit:
+                    worker_send_invoice(raw_payloads=raw_payloads_dn_submit,stock_payload=payload_stock_all_warehouse)
+                # check dn rdo
+                raw_payloads_dn_submit_rdo = create_update_invoice_payload_dn(
+                    order_ref=order,
+                    cancel=True
+                )
+                if raw_payloads_dn_submit_rdo:
+                    worker_send_invoice(is_cancel=True,raw_payloads=raw_payloads_dn_submit_rdo,stock_payload=payload_stock_all_warehouse)
+                # check so cancel
+                raw_payloads_so_cancel = create_post_invoice_payload(
+                    order_ref=order,
+                    is_cancel=True
+                )
+                if raw_payloads_so_cancel:
+                    worker_send_invoice(is_cancel=True,raw_payloads=raw_payloads_so_cancel,stock_payload=payload_stock_all_warehouse)
     except Exception:
         err_text = traceback.format_exc()
         logger.log({

@@ -104,8 +104,9 @@ def resend_kino_invoice():
             main_so = check_retur_so(so)
             failed_so.append(main_so)
     payload = {
-        "ORDER_REF":failed_so,
-        "END_DATE":transaction_date
+        "ORDER_REF":[],
+        "END_DATE":transaction_date,
+        "ORDER_REF_LIST":failed_so
     }
     repost_failed_invoice(data_dict=payload)
 
