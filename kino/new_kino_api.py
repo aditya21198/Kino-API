@@ -734,8 +734,8 @@ def create_post_invoice_payload(order_ref:str = None,start_date:str = None,end_d
 
 def create_update_invoice_payload_dn(order_ref_list:list=[],order_ref:str=None,start_date:str=None,end_date:str=None,cancel:bool=False):
     if order_ref_list:
-        order_ref_condition = " OR ".join([f"dni.against_sales_order = '{ref}'" for ref in order_ref_list])
-        sql_condition = f"AND ({order_ref_condition})"
+        refs = "', '".join(order_ref_list)
+        sql_condition = f"AND dni.against_sales_order IN ('{refs}')"
     else:
         sql_condition = f"AND dni.against_sales_order = '{order_ref}'" if order_ref else ""
     date_condition = f"AND dn.posting_date BETWEEN '{start_date}' AND '{end_date}'" if start_date and end_date else ""
