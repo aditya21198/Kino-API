@@ -67,7 +67,7 @@ def get_kino_config(branch_code, entity_code,warehouse, force_reload=False):
                     kino_config[mapping[f]] = v
 
     _KINO_CONFIG_CACHE[cache_key] = kino_config
-    return kino_config
+    return _KINO_CONFIG_CACHE[cache_key]
 
 def update_access_token_and_access_token_creation(value,field,branch_code,entity_code,warehouse):
     query = f"""
@@ -247,7 +247,8 @@ def check_trasaction_date_over_closing_date_kino(transaction_date, dn_posting_da
     WHERE doctype = 'Kino API Settings'
     AND field = 'kino_closing_day'
     """
-    closing_day = execute_query_fetch(query=query)[0]['value'] if execute_query_fetch(query=query) and execute_query_fetch(query=query)[0]['value'] > 0 else 2
+    result_closing_day = execute_query_fetch(query=query)
+    closing_day = result_closing_day[0]['value'] if result_closing_day and result_closing_day[0]['value'] > 0 else 2
     today = datetime.now().date()
 
     today_month_day2 = date(today.year, today.month, int(closing_day))
