@@ -3,7 +3,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import requests
 from datetime import datetime,timedelta
 import calendar
-from kino.kino_api import ids_post_invoice,post_stock,load_dbp_cache,repost_failed_invoice
+from kino.new_kino_api import ids_post_invoice,post_stock,load_dbp_cache,repost_failed_invoice
 from fastapi import FastAPI, BackgroundTasks
 from database import execute_query_fetch
 import json
@@ -73,6 +73,8 @@ def resend_kino_invoice():
         and order_ref is not null
         and response not like '%%SFA_ORDERNO ALREADY EXISTS%%'
         and (kino_status is null or kino_status = 'error')
+        and request not like '%%OVALE-DUMMYBLUE%%'
+        and request not like '%%DUMMY-OVALEMIC%%'
     """
     result = execute_query_fetch(query=query)
     sos = []
@@ -102,8 +104,9 @@ def resend_kino_invoice():
             main_so = check_retur_so(so)
             failed_so.append(main_so)
     payload = {
-        "ORDER_REF":failed_so,
-        "END_DATE":transaction_date
+        "ORDER_REF":[],
+        "END_DATE":transaction_date,
+        "ORDER_REF_LIST":failed_so
     }
     repost_failed_invoice(data_dict=payload)
 
