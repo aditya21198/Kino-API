@@ -516,7 +516,7 @@ def post_stock(data:dict = None):
             config = get_kino_config(branch_code=key[1],entity_code=key[2],warehouse=key[0])
             access_token = login(branch_code=key[1],entity_code=key[2],warehouse=key[0])['access_token']
             response = requests.post(
-                url = config["kino_host"] + "api/stock/balance",
+                url = config["kino_host"] + "api/ids/extclient/masterpayload",
                 json = value,
                 headers={
                     "Content-Type": "application/json",
