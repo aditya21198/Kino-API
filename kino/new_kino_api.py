@@ -522,7 +522,7 @@ def post_stock(data:dict = None):
                     "Content-Type": "application/json",
                     "Authorization": f"Bearer {access_token}"
                 },
-                timeout=(5,10)
+                timeout=(5,120)
             )
             response_data = safe_response_json(response)
             logger.log({
