@@ -9,7 +9,7 @@ import json
 from log_handler.logs import KinoLogger
 from datetime import datetime,timedelta,date
 from database import execute_query_fetch, make_db_connection,update_table
-from services import kino_get_replacement_item
+
 
 LOGIN_LOCK = Lock()
 
@@ -1143,6 +1143,7 @@ def build_payload(result: list,is_cancel:bool=False):
         raise Exception (traceback.format_exc())
 
 def worker_send_invoice(raw_payloads, is_cancel=False, stock_payload=None):
+    from services import kino_get_replacement_item
     grouped = {}
     kino_items_replacement = kino_get_replacement_item()
 
@@ -1428,6 +1429,6 @@ def ids_post_invoice(data_dict: dict):
 if __name__ == '__main__':
     import pprint
     from kino_api_test import mock_data_query_invoice
-    payload_stock_all_warehouse = create_stock_payload(item_code = None,warehouse=None,date='2026-03-31')
-    worker_send_invoice(raw_payloads=mock_data_query_invoice(),stock_payload=payload_stock_all_warehouse)
-    # print(create_stock_payload())
+    payload_stock_all_warehouse = create_stock_payload(item_code ='OVALE-DUMMYBLUE',warehouse=None,date='2026-04-24')
+    # worker_send_invoice(raw_payloads=mock_data_query_invoice(),stock_payload=payload_stock_all_warehouse)
+    print(payload_stock_all_warehouse)
