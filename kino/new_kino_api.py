@@ -476,7 +476,8 @@ def create_stock_payload(item_code: str = None, warehouse: str = None,date:str=N
                                     detail = header_template[header]["DATA"][0]["DETAIL"]
                                 except (KeyError, IndexError):
                                     header_template[header]["DATA"].append({"DETAIL": []})
-                                header_template[header]["DATA"][0]["DETAIL"].append(stock_detail)
+                                if stock_detail not in header_template[header]["DATA"][0]["DETAIL"]:
+                                    header_template[header]["DATA"][0]["DETAIL"].append(stock_detail)
                     else:
                         stock_detail = {
                             "PRDCODE": remove_kn(kino_stock.get("item_code")),
