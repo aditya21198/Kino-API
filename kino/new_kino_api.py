@@ -248,7 +248,7 @@ def check_trasaction_date_over_closing_date_kino(transaction_date, dn_posting_da
     AND field = 'kino_closing_day'
     """
     result_closing_day = execute_query_fetch(query=query)
-    closing_day = result_closing_day[0]['value'] if result_closing_day and result_closing_day[0]['value'] > 0 else 2
+    closing_day = result_closing_day[0]['value'] if result_closing_day and int(result_closing_day[0]['value']) > 0 else 2
     today = datetime.now().date()
 
     today_month_day2 = date(today.year, today.month, int(closing_day))
