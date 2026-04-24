@@ -9,6 +9,7 @@ import json
 from log_handler.logs import KinoLogger
 from datetime import datetime,timedelta,date
 from database import execute_query_fetch, make_db_connection,update_table
+from services import kino_get_replacement_item
 
 LOGIN_LOCK = Lock()
 
@@ -317,7 +318,8 @@ def get_all_balance_kino_item(item_code: str = None, warehouse: str = None,to_da
     x.item_code,
     x.warehouse,
     SUM(x.actual_qty) as balance,
-    x.sub_brand
+    x.sub_brand,
+    tis.supplier_part_no
 	FROM(
         SELECT
             sle.item_code,
@@ -329,6 +331,8 @@ def get_all_balance_kino_item(item_code: str = None, warehouse: str = None,to_da
         INNER JOIN `tabItem` it ON it.name = sle.item_code
         {conditions}
        )x
+    LEFT JOIN `tabItem Supplier` as tis
+    ON tis.parent = x.item_code AND tis.idx = 0
     GROUP BY x.warehouse,x.item_code,x.sub_brand
     """
     return execute_query_fetch(query=query, params=tuple(params))
@@ -441,7 +445,7 @@ def create_stock_payload(item_code: str = None, warehouse: str = None,date:str=N
                                 and sub_brand["branch_code"] == header[1] and sub_brand["entity_code"] == header[2]:
                                 if kino_stock.get("sub_brand").lower() in sub_brand["sub_brands"]:
                                     stock_detail = {
-                                        "PRDCODE": remove_kn(kino_stock.get("item_code")),
+                                        "PRDCODE": remove_kn(kino_stock.get("item_code")) if not kino_stock.get("supplier_part_no") else remove_kn(kino_stock.get("supplier_part_no")),
                                         "WHLOC1": whloc1,
                                         "WHLOC2": whloc2,
                                         "QTY": kino_stock.get("balance")
@@ -455,7 +459,7 @@ def create_stock_payload(item_code: str = None, warehouse: str = None,date:str=N
                                 and sub_brand["branch_code"] != header[1] or sub_brand["entity_code"] != header[2]:
                                 if kino_stock.get("sub_brand").lower() not in sub_brand["sub_brands"]:
                                     stock_detail = {
-                                        "PRDCODE": remove_kn(kino_stock.get("item_code")),
+                                        "PRDCODE": remove_kn(kino_stock.get("item_code")) if not kino_stock.get("supplier_part_no") else remove_kn(kino_stock.get("supplier_part_no")),
                                         "WHLOC1": whloc1,
                                         "WHLOC2": whloc2,
                                         "QTY": kino_stock.get("balance")
@@ -467,7 +471,7 @@ def create_stock_payload(item_code: str = None, warehouse: str = None,date:str=N
                                     header_template[header]["DATA"][0]["DETAIL"].append(stock_detail)
                             if sub_brand["warehouse"] != kino_stock.get("warehouse"):
                                 stock_detail = {
-                                    "PRDCODE": remove_kn(kino_stock.get("item_code")),
+                                    "PRDCODE": remove_kn(kino_stock.get("item_code")) if not kino_stock.get("supplier_part_no") else remove_kn(kino_stock.get("supplier_part_no")),
                                     "WHLOC1": whloc1,
                                     "WHLOC2": whloc2,
                                     "QTY": kino_stock.get("balance")
@@ -479,7 +483,7 @@ def create_stock_payload(item_code: str = None, warehouse: str = None,date:str=N
                                 header_template[header]["DATA"][0]["DETAIL"].append(stock_detail)
                     else:
                         stock_detail = {
-                            "PRDCODE": remove_kn(kino_stock.get("item_code")),
+                            "PRDCODE": remove_kn(kino_stock.get("item_code")) if not kino_stock.get("supplier_part_no") else remove_kn(kino_stock.get("supplier_part_no")),
                             "WHLOC1": whloc1,
                             "WHLOC2": whloc2,
                             "QTY": kino_stock.get("balance")
@@ -1141,9 +1145,17 @@ def build_payload(result: list,is_cancel:bool=False):
 
 def worker_send_invoice(raw_payloads, is_cancel=False, stock_payload=None):
     grouped = {}
+    kino_items_replacement = kino_get_replacement_item()
 
     for row in raw_payloads:
         so_ref = row.get('name')
+        item_code = row.get('item_code')
+        if kino_items_replacement:
+            for replancement_item in kino_items_replacement:
+                if replancement_item['item_code'] == item_code:
+                    row['item_code'] = replancement_item['supplier_part_no']
+                    break
+        
         if not so_ref:
             continue
         grouped.setdefault(so_ref, []).append(row)
