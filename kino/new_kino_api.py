@@ -178,7 +178,7 @@ def load_customer_mapping():
 
     mapping = {}
     for row in result:
-        key = (row['store'].lower(), row['channel'].lower())
+        key = (row['store'].lower(), row['channel'].lower(),row['cm_branch'].lower(),row['cm_entity'].lower())
         mapping[key] = (
             row['cm_cust_code1'],
             row['cm_cust_code2'],
@@ -192,9 +192,66 @@ def load_customer_mapping():
 
     return mapping
 
-def get_customer_code(store:str, channel:str):
+KINO_CONFIG = None
+KINO_CONFIG_LAST_MODIFIED = None
+def laod_kino_config():
+    global KINO_CONFIG,KINO_CONFIG_LAST_MODIFIED
+    last_modified = execute_query_fetch("""
+        SELECT MAX(modified) as last_modified
+        FROM `tabCustomer Mapping Detail`
+        WHERE parent = 'Kino API Settings'
+    """)[0]["last_modified"]
+
+    if (KINO_CONFIG is not None and KINO_CONFIG_LAST_MODIFIED == last_modified):
+        return KINO_CONFIG
+    
+    result = execute_query_fetch("""
+        SELECT 
+            kino_client.client_id AS kino_client_id,
+            kino_client.client_secret AS kino_client_secret,
+            kino_client.branch_code,
+            kino_client.entity_code,
+            kino_client.access_token AS kino_access_token,
+            kino_client.access_token_creation AS kino_access_token_creation,
+            kino_client.warehouse,
+            sin.value AS kino_host
+        FROM `tabKino Client Details` AS kino_client
+        LEFT JOIN `tabSingles` AS sin ON sin.doctype = kino_client.parent
+        WHERE sin.field = 'kino_general_host'
+    """)
+    if result:
+        KINO_CONFIG = result
+        KINO_CONFIG_LAST_MODIFIED = last_modified
+        return result
+
+def check_branch_entity_sub_brand(warehouse,sub_brand):
+    sub_brands = get_sub_brand_mapping()
+    kino_config = laod_kino_config()
+    branch_code = None
+    enity_code = None
+    found = False
+    if sub_brands:
+        for brand in sub_brands:
+            if brand['warehouse'] == warehouse and brand['sub_brand'].lower() == sub_brand.lower():
+                branch_code = brand['branch_code']
+                enity_code = brand['entity_code']
+                found = True
+                break
+    
+    if found:
+        return branch_code,enity_code
+    else:
+        for config in kino_config:
+            if config['warehouse'] == warehouse:
+                branch_code = config['branch_code']
+                enity_code = config['entity_code']
+                break
+    return branch_code,enity_code
+
+def get_customer_code(store:str, channel:str,warehouse:str,sub_brand:str):
     mapping = load_customer_mapping()
-    key = (store.lower(), channel.lower())
+    branch_code,entity_code = check_branch_entity_sub_brand(warehouse=warehouse,sub_brand=sub_brand)
+    key = (store.lower(), channel.lower(), branch_code.lower(), entity_code.lower())
     if key in mapping:
         return mapping[key]
     raise Exception(f"Customer Code with store {store} and channel {channel} not found")
@@ -979,6 +1036,7 @@ def grouped_data_by_order_id(query_result: list, is_cancel: bool = False):
     for row in query_result:
         order_id = row.get('name')
         warehouse = row.get('warehouse')
+        sub_brand = row.get('sub_brand')
         if not order_id:
             continue
 
@@ -986,14 +1044,15 @@ def grouped_data_by_order_id(query_result: list, is_cancel: bool = False):
             grouped_data[order_id] = []
 
             try:
-                # === CUSTOMER CODE ===
                 store = row.get('store')
                 channel = row.get('channel')
 
                 cust_code1, cust_code2, entity_code, branch_code, region_code = \
                     get_customer_code(
                         store=store,
-                        channel=channel
+                        channel=channel,
+                        warehouse=warehouse,
+                        sub_brand=sub_brand
                     )
 
                 salesman_code = get_salesman_code(
