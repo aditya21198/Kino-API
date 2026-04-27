@@ -73,8 +73,6 @@ def resend_kino_invoice():
         and order_ref is not null
         and response not like '%%SFA_ORDERNO ALREADY EXISTS%%'
         and (kino_status is null or kino_status = 'error')
-        and request not like '%%OVALE-DUMMYBLUE%%'
-        and request not like '%%DUMMY-OVALEMIC%%'
     """
     result = execute_query_fetch(query=query)
     sos = []

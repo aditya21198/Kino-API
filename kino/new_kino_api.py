@@ -1203,15 +1203,13 @@ def worker_send_invoice(raw_payloads, is_cancel=False, stock_payload=None):
                             stock_map[map_key]["QTY"] += stock_detail["QTY"]
 
             for (warehouse,branch_code,entity_code,pcode), stock_detail in stock_map.items():
-                if pcode not in aggregate_item_code:
-                    continue
-
-                stock_payload_header[payload_key]["DATA"][0]["DETAIL"].append({
-                    "PRDCODE": pcode,
-                    "WHLOC1": stock_detail["WHLOC1"],
-                    "WHLOC2": stock_detail["WHLOC2"],
-                    "QTY": stock_detail["QTY"] + aggregate_item_code[pcode]
-                })
+                if pcode in aggregate_item_code:
+                    stock_payload_header[payload_key]["DATA"][0]["DETAIL"].append({
+                        "PRDCODE": pcode,
+                        "WHLOC1": stock_detail["WHLOC1"],
+                        "WHLOC2": stock_detail["WHLOC2"],
+                        "QTY": stock_detail["QTY"] + aggregate_item_code[pcode]
+                    })
             
             if stock_payload_header[payload_key]["DATA"][0]["DETAIL"]:
                 post_stock(data=stock_payload_header[payload_key])
@@ -1416,8 +1414,6 @@ def ids_post_invoice(data_dict: dict):
         })
 
 if __name__ == '__main__':
-    import pprint
-    from kino_api_test import mock_data_query_invoice
-    payload_stock_all_warehouse = create_stock_payload(item_code = None,warehouse=None,date='2026-03-31')
-    worker_send_invoice(raw_payloads=mock_data_query_invoice(),stock_payload=payload_stock_all_warehouse)
-    # print(create_stock_payload())
+    date_1 = '2026-04-26'
+    payload_all_warehouse = create_stock_payload(item_code = None,warehouse=None,date=date_1)
+    print(payload_all_warehouse)
