@@ -198,7 +198,7 @@ def laod_kino_config():
     global KINO_CONFIG,KINO_CONFIG_LAST_MODIFIED
     last_modified = execute_query_fetch("""
         SELECT MAX(modified) as last_modified
-        FROM `tabCustomer Mapping Detail`
+        FROM `tabKino Client Details`
         WHERE parent = 'Kino API Settings'
     """)[0]["last_modified"]
 
