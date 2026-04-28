@@ -227,12 +227,14 @@ def laod_kino_config():
 def check_branch_entity_sub_brand(warehouse,sub_brand):
     sub_brands = get_sub_brand_mapping()
     kino_config = laod_kino_config()
+    branch_codes = list(set(row['branch_code'] for row in sub_brands))
+    entity_codes = list(set(row['entity_code'] for row in sub_brands))
     branch_code = None
     enity_code = None
     found = False
     if sub_brands:
         for brand in sub_brands:
-            if brand['warehouse'] == warehouse and brand['sub_brand'].lower() == sub_brand.lower():
+            if brand['warehouse'] == warehouse and sub_brand.lower() in brand['sub_brands']:
                 branch_code = brand['branch_code']
                 enity_code = brand['entity_code']
                 found = True
@@ -243,18 +245,22 @@ def check_branch_entity_sub_brand(warehouse,sub_brand):
     else:
         for config in kino_config:
             if config['warehouse'] == warehouse:
-                branch_code = config['branch_code']
-                enity_code = config['entity_code']
-                break
+                if config['branch_code'] not in branch_codes:
+                    branch_code = config['branch_code']
+                    enity_code = config['entity_code']
+                    break
     return branch_code,enity_code
 
 def get_customer_code(store:str, channel:str,warehouse:str,sub_brand:str):
-    mapping = load_customer_mapping()
-    branch_code,entity_code = check_branch_entity_sub_brand(warehouse=warehouse,sub_brand=sub_brand)
-    key = (store.lower(), channel.lower(), branch_code.lower(), entity_code.lower())
-    if key in mapping:
-        return mapping[key]
-    raise Exception(f"Customer Code with store {store} and channel {channel} not found")
+    try:
+        mapping = load_customer_mapping()
+        branch_code,entity_code = check_branch_entity_sub_brand(warehouse=warehouse,sub_brand=sub_brand)
+        key = (store.lower(), channel.lower(), branch_code.lower(), entity_code.lower())
+        if key in mapping:
+            return mapping[key]
+    except Exception as error:
+        print(traceback.format_exc())
+        raise Exception(f"Customer Code with store {store} and channel {channel} not found")
 
 def remove_kn(item_code: str):
     if item_code.startswith("KN"):
@@ -793,7 +799,7 @@ def create_post_invoice_payload(order_ref:str = None,start_date:str = None,end_d
     except Exception as error:
         raise Exception(traceback.format_exc())
 
-def create_update_invoice_payload_dn(order_ref_list:list=[],order_ref:str=None,start_date:str=None,end_date:str=None,cancel:bool=False):
+def create_update_invoice_payload_dn(order_ref_list=None,order_ref:str=None,start_date:str=None,end_date:str=None,cancel:bool=False):
     if order_ref_list:
         refs = "', '".join(order_ref_list)
         sql_condition = f"AND dni.against_sales_order IN ('{refs}')"
