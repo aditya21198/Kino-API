@@ -113,13 +113,13 @@ def kino_get_replacement_item():
     select tis.parent as item_code,tis.supplier_part_no
     from aladdin.tabItem as ti
     left join aladdin.`tabItem Supplier` as tis on tis.parent = ti.item_code
+    and tis.idx = 1
     where tis.supplier_part_no is not null
     and ti.brand = 'Kino'
-    order by tis.idx asc limit 1
     """
     result = execute_query_fetch(query=query)
     if result:
-        return
+        return result
 
 if __name__ == "__main__":
     resend_kino_invoice()

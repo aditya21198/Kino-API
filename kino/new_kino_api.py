@@ -473,6 +473,8 @@ def get_sub_brand_mapping():
 
 def create_stock_payload(item_code: str = None, warehouse: str = None,date:str=None):
     try:
+        from services import kino_get_replacement_item
+        kino_replacement_items = kino_get_replacement_item()
         kino_stock_balance = get_all_balance_kino_item(
             item_code=item_code,
             warehouse=warehouse,
@@ -488,6 +490,11 @@ def create_stock_payload(item_code: str = None, warehouse: str = None,date:str=N
         for kino_stock in kino_stock_balance:
             whloc1 = None
             whloc2 = None
+            if kino_replacement_items:
+                for item in kino_replacement_items:
+                    if item['item_code'] == kino_stock.get("item_code"):
+                        kino_stock["item_code"] = item['supplier_part_no']
+                        break
 
             for wh in warehouse_mapping:
                 if wh.get("warehouse") == kino_stock.get("warehouse"):
@@ -1493,6 +1500,10 @@ def ids_post_invoice(data_dict: dict):
 if __name__ == '__main__':
     import pprint
     from kino_api_test import mock_data_query_invoice
-    payload_stock_all_warehouse = create_stock_payload(item_code ='OVALE-DUMMYBLUE',warehouse=None,date='2026-04-24')
+    data_dict = {
+        "item_code":None,
+        "warehouse":None,
+        "date":"2026-04-27"
+    }
+    payload_stock_all_warehouse = post_stock(data=data_dict)
     # worker_send_invoice(raw_payloads=mock_data_query_invoice(),stock_payload=payload_stock_all_warehouse)
-    print(payload_stock_all_warehouse)
