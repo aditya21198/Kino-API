@@ -8,6 +8,7 @@ from threading import Lock
 import json
 from log_handler.logs import KinoLogger
 from datetime import datetime,timedelta,date
+import re
 from database import execute_query_fetch, make_db_connection,update_table
 
 
@@ -263,9 +264,18 @@ def get_customer_code(store:str, channel:str,warehouse:str,sub_brand:str):
         raise Exception(f"Customer Code with store {store} and channel {channel} not found")
 
 def remove_kn(item_code: str):
-    if item_code.startswith("KN"):
-        return item_code[2:]
-    return item_code
+    codes = [x.strip() for x in item_code.split(",")]
+
+    cleaned = []
+    for code in codes:
+        match = re.match(r"^[A-Z]+(\d+)$", code)
+        if match:
+            cleaned.append(match.group(1))
+        else:
+            cleaned.append(code)
+
+    return ", ".join(cleaned)
+
 
 SALESMAN_MAPPING_CACHE = None
 SALESMAN_MAPPING_LAST_MODIFIED = None
