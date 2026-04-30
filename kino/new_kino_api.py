@@ -625,6 +625,7 @@ def post_stock(data:dict = None):
             )
             response_data = safe_response_json(response)
             logger.log({
+                "url":config["kino_host"] + "api/ids/extclient/masterpayload",
                 "title": "STOCK_POST",
                 "method": "POST",
                 "status_code": response.status_code,
@@ -634,6 +635,7 @@ def post_stock(data:dict = None):
             })
     except Exception as e:
         logger.log({
+            "url":"http://dms3.kino.co.id:8082/api/ids/extclient/masterpayload",
             "title": "STOCK_ERROR",
             "method": "POST",
             "status_code": None,
