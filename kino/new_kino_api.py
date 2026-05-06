@@ -1314,14 +1314,25 @@ def worker_send_invoice(raw_payloads, is_cancel=False, stock_payload=None):
                         else:
                             stock_map[map_key]["QTY"] += stock_detail["QTY"]
 
-            for (warehouse,branch_code,entity_code,pcode), stock_detail in stock_map.items():
-                if pcode in aggregate_item_code:
-                    stock_payload_header[payload_key]["DATA"][0]["DETAIL"].append({
-                        "PRDCODE": pcode,
-                        "WHLOC1": stock_detail["WHLOC1"],
-                        "WHLOC2": stock_detail["WHLOC2"],
-                        "QTY": stock_detail["QTY"] + aggregate_item_code[pcode]
-                    })
+            for pcode, qty in aggregate_item_code.items():
+                map_key = payload_key + (pcode,)
+                stock_detail = stock_map.get(map_key)
+
+                if stock_detail:
+                    final_qty = stock_detail["QTY"] + qty
+                    whloc1 = stock_detail["WHLOC1"]
+                    whloc2 = stock_detail["WHLOC2"]
+                else:
+                    final_qty = qty
+                    whloc1 = ""
+                    whloc2 = ""
+
+                stock_payload_header[payload_key]["DATA"][0]["DETAIL"].append({
+                    "PRDCODE": pcode,
+                    "WHLOC1": whloc1,
+                    "WHLOC2": whloc2,
+                    "QTY": final_qty
+                })
             
             if stock_payload_header[payload_key]["DATA"][0]["DETAIL"]:
                 post_stock(data=stock_payload_header[payload_key])
