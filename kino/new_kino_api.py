@@ -601,6 +601,42 @@ def safe_response_json(response):
     except ValueError:
         return None
 
+def send_single_stock(payload_with_key):
+    try:
+        for key, value in payload_with_key.items():
+            config = get_kino_config(branch_code=key[1],entity_code=key[2],warehouse=key[0])
+            access_token = login(branch_code=key[1],entity_code=key[2],warehouse=key[0])['access_token']
+            response = requests.post(
+                url = config["kino_host"] + "api/ids/extclient/masterpayload",
+                json = value,
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {access_token}"
+                },
+                timeout=(5,120)
+            )
+            response_data = safe_response_json(response)
+            logger.log({
+                "url":config["kino_host"] + "api/ids/extclient/masterpayload",
+                "title": "STOCK_POST",
+                "method": "POST",
+                "status_code": response.status_code,
+                "kino_status": response_data.get("status") if response_data else None,
+                "request": json.dumps(value),
+                "response": json.dumps(response_data) if response_data else response.text
+            })
+    except Exception as e:
+        logger.log({
+            "url":"http://dms3.kino.co.id:8082/api/ids/extclient/masterpayload",
+            "title": "STOCK_ERROR",
+            "method": "POST",
+            "status_code": None,
+            "kino_status":None,
+            "request": None,
+            "response": traceback.format_exc()
+        })
+        print(traceback.format_exc())
+
 def post_stock(data:dict = None):
     try:
         item_code = None
@@ -1335,7 +1371,7 @@ def worker_send_invoice(raw_payloads, is_cancel=False, stock_payload=None):
                 })
             
             if stock_payload_header[payload_key]["DATA"][0]["DETAIL"]:
-                post_stock(data=stock_payload_header[payload_key])
+                send_single_stock(payload_with_key=stock_payload_header)
             if is_cancel:
                 latest_increment = get_last_cancelled_order_ref_name(order_ref=so_ref)
 
@@ -1539,9 +1575,11 @@ def ids_post_invoice(data_dict: dict):
 if __name__ == '__main__':
     import pprint
     from kino_api_test import mock_data_query_invoice
+    print("run\n")
+    # for test only
     data_dict = {
-        "item_code":None,
-        "warehouse":None,
-        "date":"2026-04-29"
+        "ORDER_REF":["SO-ARB-26-01983185"],
+        "START_DATE": "2026-05-08",
+        "END_DATE": "2026-05-09"
     }
-    payload_stock_all_warehouse = post_stock(data=data_dict)
+    ids_post_invoice(data_dict=data_dict)
