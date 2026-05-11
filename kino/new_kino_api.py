@@ -481,6 +481,17 @@ def get_sub_brand_mapping():
 
     return data
 
+def append_or_sum_detail(detail_list, stock_detail):
+    for d in detail_list:
+        if (
+            d["PRDCODE"] == stock_detail["PRDCODE"]
+            and d["WHLOC1"] == stock_detail["WHLOC1"]
+            and d["WHLOC2"] == stock_detail["WHLOC2"]
+        ):
+            d["QTY"] += stock_detail["QTY"]
+            return
+    detail_list.append(stock_detail)
+
 def create_stock_payload(item_code: str = None, warehouse: str = None,date:str=None):
     try:
         from services import kino_get_replacement_item
@@ -533,9 +544,11 @@ def create_stock_payload(item_code: str = None, warehouse: str = None,date:str=N
                                         detail = header_template[header]["DATA"][0]["DETAIL"]
                                     except (KeyError, IndexError):
                                         header_template[header]["DATA"].append({"DETAIL": []})
-                                    header_template[header]["DATA"][0]["DETAIL"].append(stock_detail)
-                            if sub_brand["warehouse"] == header[0] and sub_brand["warehouse"] == kino_stock.get("warehouse") \
-                                and sub_brand["branch_code"] != header[1] or sub_brand["entity_code"] != header[2]:
+                                    if stock_detail not in header_template[header]["DATA"][0]["DETAIL"]:
+                                        detail_list = header_template[header]["DATA"][0]["DETAIL"]
+                                        append_or_sum_detail(detail_list, stock_detail)
+                            elif sub_brand["warehouse"] == header[0] and sub_brand["warehouse"] == kino_stock.get("warehouse") \
+                                and (sub_brand["branch_code"] != header[1] or sub_brand["entity_code"] != header[2]):
                                 if kino_stock.get("sub_brand").lower() not in sub_brand["sub_brands"]:
                                     stock_detail = {
                                         "PRDCODE": remove_kn(kino_stock.get("item_code")) if not kino_stock.get("supplier_part_no") else remove_kn(kino_stock.get("supplier_part_no")),
@@ -547,8 +560,10 @@ def create_stock_payload(item_code: str = None, warehouse: str = None,date:str=N
                                         detail = header_template[header]["DATA"][0]["DETAIL"]
                                     except (KeyError, IndexError):
                                         header_template[header]["DATA"].append({"DETAIL": []})
-                                    header_template[header]["DATA"][0]["DETAIL"].append(stock_detail)
-                            if sub_brand["warehouse"] != kino_stock.get("warehouse"):
+                                    if stock_detail not in header_template[header]["DATA"][0]["DETAIL"]:
+                                        detail_list = header_template[header]["DATA"][0]["DETAIL"]
+                                        append_or_sum_detail(detail_list, stock_detail)
+                            elif sub_brand["warehouse"] != kino_stock.get("warehouse"):
                                 stock_detail = {
                                     "PRDCODE": remove_kn(kino_stock.get("item_code")) if not kino_stock.get("supplier_part_no") else remove_kn(kino_stock.get("supplier_part_no")),
                                     "WHLOC1": whloc1,
@@ -560,7 +575,8 @@ def create_stock_payload(item_code: str = None, warehouse: str = None,date:str=N
                                 except (KeyError, IndexError):
                                     header_template[header]["DATA"].append({"DETAIL": []})
                                 if stock_detail not in header_template[header]["DATA"][0]["DETAIL"]:
-                                    header_template[header]["DATA"][0]["DETAIL"].append(stock_detail)
+                                    detail_list = header_template[header]["DATA"][0]["DETAIL"]
+                                    append_or_sum_detail(detail_list, stock_detail)
                     else:
                         stock_detail = {
                             "PRDCODE": remove_kn(kino_stock.get("item_code")) if not kino_stock.get("supplier_part_no") else remove_kn(kino_stock.get("supplier_part_no")),
@@ -572,12 +588,12 @@ def create_stock_payload(item_code: str = None, warehouse: str = None,date:str=N
                             detail = header_template[header]["DATA"][0]["DETAIL"]
                         except (KeyError, IndexError):
                             header_template[header]["DATA"].append({"DETAIL": []})
-                        header_template[header]["DATA"][0]["DETAIL"].append(stock_detail)
+                        if stock_detail not in header_template[header]["DATA"][0]["DETAIL"]:
+                            detail_list = header_template[header]["DATA"][0]["DETAIL"]
+                            append_or_sum_detail(detail_list, stock_detail)
         return header_template
     except Exception:
         raise Exception(traceback.format_exc())
-        
-
 
 def safe_response_json(response):
     try:
@@ -609,6 +625,7 @@ def post_stock(data:dict = None):
             )
             response_data = safe_response_json(response)
             logger.log({
+                "url":config["kino_host"] + "api/ids/extclient/masterpayload",
                 "title": "STOCK_POST",
                 "method": "POST",
                 "status_code": response.status_code,
@@ -618,6 +635,7 @@ def post_stock(data:dict = None):
             })
     except Exception as e:
         logger.log({
+            "url":"http://dms3.kino.co.id:8082/api/ids/extclient/masterpayload",
             "title": "STOCK_ERROR",
             "method": "POST",
             "status_code": None,
@@ -1296,14 +1314,25 @@ def worker_send_invoice(raw_payloads, is_cancel=False, stock_payload=None):
                         else:
                             stock_map[map_key]["QTY"] += stock_detail["QTY"]
 
-            for (warehouse,branch_code,entity_code,pcode), stock_detail in stock_map.items():
-                if pcode in aggregate_item_code:
-                    stock_payload_header[payload_key]["DATA"][0]["DETAIL"].append({
-                        "PRDCODE": pcode,
-                        "WHLOC1": stock_detail["WHLOC1"],
-                        "WHLOC2": stock_detail["WHLOC2"],
-                        "QTY": stock_detail["QTY"] + aggregate_item_code[pcode]
-                    })
+            for pcode, qty in aggregate_item_code.items():
+                map_key = payload_key + (pcode,)
+                stock_detail = stock_map.get(map_key)
+
+                if stock_detail:
+                    final_qty = stock_detail["QTY"] + qty
+                    whloc1 = stock_detail["WHLOC1"]
+                    whloc2 = stock_detail["WHLOC2"]
+                else:
+                    final_qty = qty
+                    whloc1 = ""
+                    whloc2 = ""
+
+                stock_payload_header[payload_key]["DATA"][0]["DETAIL"].append({
+                    "PRDCODE": pcode,
+                    "WHLOC1": whloc1,
+                    "WHLOC2": whloc2,
+                    "QTY": final_qty
+                })
             
             if stock_payload_header[payload_key]["DATA"][0]["DETAIL"]:
                 post_stock(data=stock_payload_header[payload_key])
@@ -1513,7 +1542,6 @@ if __name__ == '__main__':
     data_dict = {
         "item_code":None,
         "warehouse":None,
-        "date":"2026-04-27"
+        "date":"2026-04-29"
     }
     payload_stock_all_warehouse = post_stock(data=data_dict)
-    # worker_send_invoice(raw_payloads=mock_data_query_invoice(),stock_payload=payload_stock_all_warehouse)
