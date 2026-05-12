@@ -1168,6 +1168,16 @@ def grouped_data_by_order_id(query_result: list, is_cancel: bool = False):
             except Exception as e:
                 #skip order ini aja
                 print(f"[SKIP ORDER {order_id}] {e}")
+                logger.log({
+                    "url": None,
+                    "title": "INVOICE_ERROR",
+                    "order_ref": order_id,
+                    "method": "POST",
+                    "status_code": 500,
+                    "kino_status": None,
+                    "request": None,
+                    "response": f"Customer Mapping Not Found For {order_id}"
+                })
                 grouped_data.pop(order_id, None)
                 continue
 
