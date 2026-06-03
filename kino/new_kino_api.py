@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from collections import defaultdict
 from threading import Lock
 import json
+import html
 from log_handler.logs import KinoLogger
 from datetime import datetime,timedelta,date
 import re
@@ -613,6 +614,12 @@ def send_single_stock(payload_with_key):
                 timeout=(5,120)
             )
             response_data = safe_response_json(response)
+            
+
+            response_str = json.dumps(response_data, ensure_ascii=True, default=str)
+            response_str = html.escape(response_str)
+            log_response = response_str[-200:] if response_str and len(response_str) > 200 else response.text
+
             logger.log({
                 "url":config["kino_host"] + "api/ids/extclient/masterpayload",
                 "title": "STOCK_POST",
@@ -620,7 +627,7 @@ def send_single_stock(payload_with_key):
                 "status_code": response.status_code,
                 "kino_status": response_data.get("status") if response_data else None,
                 "request": json.dumps(value),
-                "response": json.dumps(response_data)[-200:] if len(json.dumps(response_data)) > 200 else response.text
+                "response": log_response
             })
     except Exception as e:
         logger.log({
