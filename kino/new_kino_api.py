@@ -630,7 +630,7 @@ def send_single_stock(payload_with_key):
             "status_code": None,
             "kino_status":None,
             "request": None,
-            "response": traceback.format_exc()
+            "response": traceback.format_exc()[:200] if len(traceback.format_exc()) > 200 else traceback.format_exc()
         })
         print(traceback.format_exc())
 
