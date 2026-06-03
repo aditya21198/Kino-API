@@ -614,6 +614,8 @@ def send_single_stock(payload_with_key):
                 timeout=(5,120)
             )
             response_data = safe_response_json(response)
+            print(response_data)
+            print("response text:", response.text)
             
 
             response_str = json.dumps(response_data, ensure_ascii=True, default=str)
@@ -640,7 +642,8 @@ def send_single_stock(payload_with_key):
             "request": None,
             "response": traceback.format_exc()[-200:] if len(traceback.format_exc()) > 200 else traceback.format_exc()
         })
-        print(traceback.format_exc())
+        print("Error sending stock data to Kino API:",traceback.format_exc())
+        print("Error sending stock data to Kino API:", str(e))
 
 def post_stock(data:dict = None):
     try:
