@@ -620,7 +620,7 @@ def send_single_stock(payload_with_key):
                 "status_code": response.status_code,
                 "kino_status": response_data.get("status") if response_data else None,
                 "request": json.dumps(value),
-                "response": json.dumps(response_data) if response_data else response.text
+                "response": json.dumps(response_data)[-200:] if len(json.dumps(response_data)) > 200 else response.text
             })
     except Exception as e:
         logger.log({
@@ -630,7 +630,7 @@ def send_single_stock(payload_with_key):
             "status_code": None,
             "kino_status":None,
             "request": None,
-            "response": traceback.format_exc()[:200] if len(traceback.format_exc()) > 200 else traceback.format_exc()
+            "response": traceback.format_exc()[-200:] if len(traceback.format_exc()) > 200 else traceback.format_exc()
         })
         print(traceback.format_exc())
 
