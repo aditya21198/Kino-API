@@ -21,25 +21,16 @@ load_dotenv()
 
 _KINO_CONFIG_CACHE = {}
 
-def get_kino_config(branch_code, entity_code,warehouse, force_reload=False):
-    cache_key = (branch_code,entity_code,warehouse)
+def get_kino_config(branch_code, entity_code, warehouse, force_reload=False):
+    global _KINO_CONFIG_CACHE
+
+    cache_key = (branch_code, entity_code, warehouse)
 
     if not force_reload and cache_key in _KINO_CONFIG_CACHE:
         return _KINO_CONFIG_CACHE[cache_key]
 
-    kino_config = {
-        "warehouse":None,
-        "branch_code":None,
-        "entity_code":None,
-        "kino_host": None,
-        "kino_client_id": None,
-        "kino_client_secret": None,
-        "kino_access_token": None,
-        "kino_access_token_creation": None
-    }
-
     result = execute_query_fetch("""
-        SELECT 
+        SELECT
             kino_client.client_id AS kino_client_id,
             kino_client.client_secret AS kino_client_secret,
             kino_client.branch_code,
@@ -49,27 +40,33 @@ def get_kino_config(branch_code, entity_code,warehouse, force_reload=False):
             kino_client.warehouse,
             sin.value AS kino_host
         FROM `tabKino Client Details` AS kino_client
-        LEFT JOIN `tabSingles` AS sin ON sin.doctype = kino_client.parent
+        LEFT JOIN `tabSingles` AS sin
+            ON sin.doctype = kino_client.parent
         WHERE sin.field = 'kino_general_host'
     """)
-    mapping = {
-        "warehouse":"warehouse",
-        "branch_code":"branch_code",
-        "entity_code":"entity_code",
-        "kino_host": "kino_host",
-        "kino_client_id": "kino_client_id",
-        "kino_client_secret": "kino_client_secret",
-        "kino_access_token": "kino_access_token",
-        "kino_access_token_creation": "kino_access_token_creation",
-    }
-    if result:
-        for row in result:
-            for f, v in row.items():
-                if f in mapping:
-                    kino_config[mapping[f]] = v
 
-    _KINO_CONFIG_CACHE[cache_key] = kino_config
-    return _KINO_CONFIG_CACHE[cache_key]
+    cache = {}
+
+    for row in result or []:
+        key = (
+            row["branch_code"],
+            row["entity_code"],
+            row["warehouse"]
+        )
+
+        cache[key] = {
+            "kino_client_id": row["kino_client_id"],
+            "kino_client_secret": row["kino_client_secret"],
+            "branch_code": row["branch_code"],
+            "entity_code": row["entity_code"],
+            "kino_access_token": row["kino_access_token"],
+            "kino_access_token_creation": row["kino_access_token_creation"],
+            "warehouse": row["warehouse"],
+            "kino_host": row["kino_host"]
+        }
+
+    _KINO_CONFIG_CACHE = cache
+    return _KINO_CONFIG_CACHE.get(cache_key)
 
 def update_access_token_and_access_token_creation(value,field,branch_code,entity_code,warehouse):
     query = f"""
@@ -1168,6 +1165,16 @@ def grouped_data_by_order_id(query_result: list, is_cancel: bool = False):
             except Exception as e:
                 #skip order ini aja
                 print(f"[SKIP ORDER {order_id}] {e}")
+                logger.log({
+                    "url": None,
+                    "title": "INVOICE_ERROR",
+                    "order_ref": order_id,
+                    "method": "POST",
+                    "status_code": 500,
+                    "kino_status": None,
+                    "request": None,
+                    "response": f"Customer Mapping Not Found For {order_id}"
+                })
                 grouped_data.pop(order_id, None)
                 continue
 
