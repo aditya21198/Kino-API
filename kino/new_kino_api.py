@@ -618,6 +618,7 @@ def send_single_stock(payload_with_key):
 
             response_str = json.dumps(response_data, ensure_ascii=True, default=str)
             response_str = html.escape(response_str)
+            print(response_str)
             log_response = response_str[-200:] if response_str and len(response_str) > 200 else response.text
 
             logger.log({
