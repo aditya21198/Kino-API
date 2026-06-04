@@ -803,6 +803,8 @@ def create_post_invoice_payload(order_ref:str = None,start_date:str = None,end_d
             so.transaction_date,
             so.grand_total AS grand_total_with_vat,
             so.selling_price_list,
+            so.store_name as store,
+            so.customer_category as channel,
             COALESCE(pi.parent_item, soi.item_code) AS master_bundle_item,
             COALESCE(pi.item_code, soi.item_code) AS item_code,
             COALESCE(pi.qty, soi.qty)-soi.returned_qty AS quantity,
@@ -816,8 +818,6 @@ def create_post_invoice_payload(order_ref:str = None,start_date:str = None,end_d
             soi.price_list_rate,
 
             CASE WHEN pi.item_code IS NOT NULL THEN 1 ELSE 0 END AS is_bundle_item,
-            JSON_UNQUOTE(JSON_EXTRACT(api_log.response, '$.data.price[0].store')) AS store,
-            JSON_UNQUOTE(JSON_EXTRACT(api_log.response, '$.data.price[0].channel')) AS channel,
             it.sub_brand,
             
             soi.name AS soi_name,
@@ -850,12 +850,6 @@ def create_post_invoice_payload(order_ref:str = None,start_date:str = None,end_d
         ) bundle_sum ON bundle_sum.parent_detail_docname = soi.name
 
         LEFT JOIN aladdin.tabItem it ON it.item_code = COALESCE(pi.item_code, soi.item_code)
-        LEFT JOIN logs.erpnext_arbi_titipaja_api_log api_log ON api_log.id = (
-                SELECT l2.id
-                FROM logs.erpnext_arbi_titipaja_api_log l2
-                WHERE l2.po_no = so.po_no AND l2.title = 'Price Detail'
-                ORDER BY l2.created_at DESC, l2.id DESC LIMIT 1
-            )
 
         WHERE soi.brand = 'Kino'
         AND so.docstatus = {docstatus}
@@ -891,7 +885,7 @@ def create_update_invoice_payload_dn(order_ref_list=None,order_ref:str=None,star
     if cancel:
         is_return = 1
     query = f"""
-    SELECT
+        SELECT
         calc.name,
         calc.po_no,
         calc.transaction_date,
@@ -924,6 +918,8 @@ def create_update_invoice_payload_dn(order_ref_list=None,order_ref:str=None,star
             so.grand_total AS grand_total_with_vat,
             so.selling_price_list,
             so.set_warehouse,
+            so.customer_category as channel,
+            so.store_name as store,
             dn.posting_date,
             COALESCE(pi.parent_item, dni.item_code) AS master_bundle_item,
             COALESCE(pi.item_code, dni.item_code) AS item_code,
@@ -938,8 +934,6 @@ def create_update_invoice_payload_dn(order_ref_list=None,order_ref:str=None,star
             dni.price_list_rate,
 
             CASE WHEN pi.item_code IS NOT NULL THEN 1 ELSE 0 END AS is_bundle_item,
-            JSON_UNQUOTE(JSON_EXTRACT(api_log.response, '$.data.price[0].store')) AS store,
-            JSON_UNQUOTE(JSON_EXTRACT(api_log.response, '$.data.price[0].channel')) AS channel,
             it.sub_brand,
             
             dni.name AS dni_name,
@@ -975,12 +969,6 @@ def create_update_invoice_payload_dn(order_ref_list=None,order_ref:str=None,star
         ) bundle_sum ON bundle_sum.parent_detail_docname = dni.name
 
         LEFT JOIN aladdin.tabItem it ON it.item_code = COALESCE(pi.item_code, dni.item_code)
-        LEFT JOIN logs.erpnext_arbi_titipaja_api_log api_log ON api_log.id = (
-                SELECT l2.id
-                FROM logs.erpnext_arbi_titipaja_api_log l2
-                WHERE l2.po_no = so.po_no AND l2.title = 'Price Detail'
-                ORDER BY l2.created_at DESC, l2.id DESC LIMIT 1
-            )
 
         WHERE dni.brand = 'Kino'
         AND dn.docstatus = 1
