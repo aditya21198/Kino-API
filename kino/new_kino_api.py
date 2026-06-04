@@ -613,25 +613,27 @@ def send_single_stock(payload_with_key):
                 },
                 timeout=(5,120)
             )
-            response_data = safe_response_json(response)
-            print(response_data)
-            print("response text:", response.text)
-            
-
-            response_str = json.dumps(response_data, ensure_ascii=True, default=str)
-            response_str = html.escape(response_str)
-            print(response_str)
-            log_response = response_str[-200:] if response_str and len(response_str) > 200 else response.text
-
-            logger.log({
-                "url":config["kino_host"] + "api/ids/extclient/masterpayload",
-                "title": "STOCK_POST",
-                "method": "POST",
-                "status_code": response.status_code,
-                "kino_status": response_data.get("status") if response_data else None,
-                "request": json.dumps(value),
-                "response": log_response
-            })
+            if len(response.text) > 500:
+                logger.log({
+                    "url":config["kino_host"] + "api/ids/extclient/masterpayload",
+                    "title": "STOCK_POST",
+                    "method": "POST",
+                    "status_code": response.status_code,
+                    "kino_status": response_data.get("status") if response_data else None,
+                    "request": json.dumps(value),
+                    "response": response.text[-200:] + "...(truncated)" if response.text else None
+                })
+            else:
+                response_data = safe_response_json(response)
+                logger.log({
+                    "url":config["kino_host"] + "api/ids/extclient/masterpayload",
+                    "title": "STOCK_POST",
+                    "method": "POST",
+                    "status_code": response.status_code,
+                    "kino_status": response_data.get("status") if response_data else None,
+                    "request": json.dumps(value),
+                    "response": json.dumps(response_data) if response_data.get("status") else None
+                })
     except Exception as e:
         logger.log({
             "url":"http://dms3.kino.co.id:8082/api/ids/extclient/masterpayload",
